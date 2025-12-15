@@ -10,29 +10,29 @@ WealthAI 策略规范定义了面向策略实现者的公共接口规范（Proto
 
 ### 核心模块
 
-- **[策略执行引擎规范](./spec_strategy_engine.md)** (`spec_strategy_engine.md`)
+- **[策略执行引擎规范](../openspec/specs/strategy-engine/spec.md)** (`openspec/specs/strategy-engine/spec.md`)
   - 策略服务接口（Health/Exec）
   - 触发机制（行情/风控/订单状态）
   - 执行请求与响应结构
   - 并发与幂等约定
 
-- **[账户与持仓规范](./spec_account.md)** (`spec_account.md`)
+- **[账户与持仓规范](../openspec/specs/account/spec.md)** (`openspec/specs/account/spec.md`)
   - 账户类型与货币类型
   - 余额与持仓数据结构
   - 风控指标（保证金率、风险度、杠杆等）
 
-- **[订单管理规范](./spec_order.md)** (`spec_order.md`)
+- **[订单管理规范](../openspec/specs/order/spec.md)** (`openspec/specs/order/spec.md`)
   - 订单类型（市价/限价/止损）
   - 订单状态流转
   - 订单操作事件（创建/撤销/修改）
   - 价格字段与执行信息
 
-- **[行情数据规范](./spec_market_data.md)** (`spec_market_data.md`)
+- **[行情数据规范](../openspec/specs/market-data/spec.md)** (`openspec/specs/market-data/spec.md`)
   - Bar（K线）数据结构
   - 技术指标（MA/EMA）
   - 多分辨率行情上下文
 
-- **[Python SDK 规范](./spec_python_sdk.md)** (`spec_python_sdk.md`)
+- **[Python SDK 规范](../openspec/specs/python-sdk/spec.md)** (`openspec/specs/python-sdk/spec.md`)
   - TradingRule 查询接口
   - 佣金费率查询接口
   - 本地缓存与并发安全
@@ -66,8 +66,9 @@ WealthAI 策略规范定义了面向策略实现者的公共接口规范（Proto
 
 ## 相关资源
 
+- **[如何提需求](./如何提需求.md)** - 使用 OpenSpec 提需求的完整指南（**新手指南**）
 - [开发范式文档](./开发范式文档.md) - OpenSpec 交互入口与规范约定
-- [策略开发执行框架规划](./策略开发执行框架规划.md) - 框架设计目标与模块分工
+- [审查报告](./审查报告.md) - OpenSpec 文档审查与评审记录
 - [README.md](../README.md) - 项目总体说明
 - [review.md](../review.md) - 规范评审与改进建议
 
@@ -79,6 +80,6 @@ WealthAI 策略规范定义了面向策略实现者的公共接口规范（Proto
 
 ---
 
-**最后更新**：2025-01-XX  
+**最后更新**：2025-12-15  
 **维护者**：WealthAI 团队
 

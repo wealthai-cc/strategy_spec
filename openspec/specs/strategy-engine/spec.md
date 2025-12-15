@@ -281,7 +281,7 @@ service StrategySpec {
 ---
 
 **相关文档**：
-- [账户与持仓规范](./spec_account.md)
-- [订单管理规范](./spec_order.md)
-- [行情数据规范](./spec_market_data.md)
+- [账户与持仓规范](../account/spec.md)
+- [订单管理规范](../order/spec.md)
+- [行情数据规范](../market-data/spec.md)
 

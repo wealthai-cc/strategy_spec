@@ -20,11 +20,11 @@
 
 ### 核心模块规格文档
 
-- [策略执行引擎规范](./PRD/spec_strategy_engine.md) - 服务接口、触发机制、执行流程
-- [账户与持仓规范](./PRD/spec_account.md) - 账户类型、余额、持仓、风控指标
-- [订单管理规范](./PRD/spec_order.md) - 订单类型、状态流转、操作事件
-- [行情数据规范](./PRD/spec_market_data.md) - K线数据、技术指标、多分辨率支持
-- [Python SDK 规范](./PRD/spec_python_sdk.md) - TradingRule、佣金费率查询接口
+- [策略执行引擎规范](./openspec/specs/strategy-engine/spec.md) - 服务接口、触发机制、执行流程
+- [账户与持仓规范](./openspec/specs/account/spec.md) - 账户类型、余额、持仓、风控指标
+- [订单管理规范](./openspec/specs/order/spec.md) - 订单类型、状态流转、操作事件
+- [行情数据规范](./openspec/specs/market-data/spec.md) - K线数据、技术指标、多分辨率支持
+- [Python SDK 规范](./openspec/specs/python-sdk/spec.md) - TradingRule、佣金费率查询接口
 - [示例文档](./PRD/spec_example.md) - OpenSpec 结构示例参考
 
 ## 文件结构

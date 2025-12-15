@@ -334,6 +334,6 @@ if not is_valid:
 ---
 
 **相关文档**：
-- [订单管理规范](./spec_order.md)
-- [策略执行引擎规范](./spec_strategy_engine.md)
+- [订单管理规范](../order/spec.md)
+- [策略执行引擎规范](../strategy-engine/spec.md)
 

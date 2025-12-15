@@ -368,7 +368,7 @@ order.qty = target_qty
 ---
 
 **相关文档**：
-- [策略执行引擎规范](./spec_strategy_engine.md)
-- [账户与持仓规范](./spec_account.md)
-- [Python SDK 规范](./spec_python_sdk.md)
+- [策略执行引擎规范](../strategy-engine/spec.md)
+- [账户与持仓规范](../account/spec.md)
+- [Python SDK 规范](../python-sdk/spec.md)
 
