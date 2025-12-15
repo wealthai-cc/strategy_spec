@@ -11,6 +11,22 @@
 - 时间统一：所有时间字段使用 Unix 毫秒时间戳。
 - 明确触发：支持行情、风控、订单状态三类触发，触发详情通过 `TriggerDetail` 描述。
 
+## OpenSpec 规范文档
+
+本项目采用 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 方式进行需求与开发迭代管理。
+
+- **[OpenSpec 主规格文档](./PRD/openspec.md)**：所有规格文档的索引和入口
+- **[开发范式文档](./PRD/开发范式文档.md)**：OpenSpec 交互入口与规范约定
+
+### 核心模块规格文档
+
+- [策略执行引擎规范](./PRD/spec_strategy_engine.md) - 服务接口、触发机制、执行流程
+- [账户与持仓规范](./PRD/spec_account.md) - 账户类型、余额、持仓、风控指标
+- [订单管理规范](./PRD/spec_order.md) - 订单类型、状态流转、操作事件
+- [行情数据规范](./PRD/spec_market_data.md) - K线数据、技术指标、多分辨率支持
+- [Python SDK 规范](./PRD/spec_python_sdk.md) - TradingRule、佣金费率查询接口
+- [示例文档](./PRD/spec_example.md) - OpenSpec 结构示例参考
+
 ## 文件结构
 - `strategy_spec.proto`：服务接口与核心消息（`Exec/Health`、触发类型、执行响应）
 - `account.proto`：账户与持仓结构（含风控指标）
@@ -18,6 +34,7 @@
 - `market_data.proto`：行情结构（Bar 与技术指标）
 - `review.md`：规范评审与改进建议
 - `python_sdk.md`：策略侧 Python SDK 方法手册（TradingRule、佣金费率）
+- `PRD/`：OpenSpec 规范文档目录
 
 ## 服务接口（StrategySpec）
 - `Health(Empty) -> HealthResponse`：返回策略健康状态（`HEALTHY/DEGRADED/UNHEALTHY`）
