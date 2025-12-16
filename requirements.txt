@@ -1,0 +1,16 @@
+# Strategy Execution Engine Requirements
+
+# Core dependencies
+protobuf>=4.21.0
+grpcio>=1.50.0
+grpcio-tools>=1.50.0
+pandas>=1.5.0  # Required for wealthdata compatibility layer
+pytz>=2023.3  # Required for timezone handling in market time utilities
+matplotlib>=3.5.0  # Required for visualization charts
+
+# Development dependencies
+pytest>=7.2.0
+pytest-cov>=4.0.0
+black>=23.0.0
+mypy>=1.0.0
+

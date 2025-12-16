@@ -11,6 +11,23 @@
 - 时间统一：所有时间字段使用 Unix 毫秒时间戳。
 - 明确触发：支持行情、风控、订单状态三类触发，触发详情通过 `TriggerDetail` 描述。
 
+## OpenSpec 规范文档
+
+本项目采用 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 方式进行需求与开发迭代管理。
+
+- **[OpenSpec 主规格文档](./PRD/openspec.md)**：所有规格文档的索引和入口
+- **[开发范式文档](./PRD/开发范式文档.md)**：OpenSpec 交互入口与规范约定
+
+### 核心模块规格文档
+
+- [策略执行引擎规范](./openspec/specs/strategy-engine/spec.md) - 服务接口、触发机制、执行流程、引擎架构
+- [策略开发规范](./openspec/specs/strategy-development/spec.md) - 生命周期函数、Context 对象、wealthdata 兼容层、Python 策略开发
+- [账户与持仓规范](./openspec/specs/account/spec.md) - 账户类型、余额、持仓、风控指标
+- [订单管理规范](./openspec/specs/order/spec.md) - 订单类型、状态流转、操作事件
+- [行情数据规范](./openspec/specs/market-data/spec.md) - K线数据、技术指标、多分辨率支持
+- [Python SDK 规范](./openspec/specs/python-sdk/spec.md) - TradingRule、佣金费率查询接口
+- [示例文档](./PRD/spec_example.md) - OpenSpec 结构示例参考
+
 ## 文件结构
 - `strategy_spec.proto`：服务接口与核心消息（`Exec/Health`、触发类型、执行响应）
 - `account.proto`：账户与持仓结构（含风控指标）
@@ -18,6 +35,7 @@
 - `market_data.proto`：行情结构（Bar 与技术指标）
 - `review.md`：规范评审与改进建议
 - `python_sdk.md`：策略侧 Python SDK 方法手册（TradingRule、佣金费率）
+- `PRD/`：OpenSpec 规范文档目录
 
 ## 服务接口（StrategySpec）
 - `Health(Empty) -> HealthResponse`：返回策略健康状态（`HEALTHY/DEGRADED/UNHEALTHY`）
@@ -77,6 +95,21 @@
 - TradingRule 与 佣金费率通过本地查询接口获取，详见 `python_sdk.md`
   - `get_trading_rule(broker, symbol)`：本地开销，返回品种的下单与精度限制
   - `get_commission_rates(broker, symbol)`：本地开销，返回 Maker/Taker 手续费率
+
+## JoinQuant 兼容性
+
+WealthAI 策略框架提供完整的 JoinQuant 兼容层，支持平滑迁移：
+
+- **数据查询 API**：`get_price()`, `get_bars()`, `get_all_securities()`, `get_trade_days()`, `get_index_stocks()`, `get_index_weights()`, `get_fundamentals()`, `get_industry()`, `get_trades()`
+- **兼容功能**：全局变量（`g`）、日志模块（`log`）、定时运行（`run_daily`）、下单函数（`order_value`, `order_target`）、配置函数（`set_benchmark`, `set_option`, `set_order_cost`）
+- **市场类型支持**：股票市场（A股、美股、港股）和加密货币市场（7x24 交易）
+
+**迁移步骤**：
+1. 将 `import jqdata` 改为 `import wealthdata`
+2. 将股票代码改为交易对格式（如 `'000001.XSHE'` → `'BTCUSDT'`）
+3. 其他代码基本无需修改
+
+详细迁移指南请参考：[JoinQuant 迁移指南](./PRD/JoinQuant迁移指南.md)
 
 ## 版本与兼容
 - 语义化版本管理：变更遵循 `MAJOR.MINOR.PATCH`
