@@ -20,6 +20,7 @@ WealthAI 策略规范定义了面向策略实现者的公共接口规范（Proto
 - **[策略开发规范](../openspec/specs/strategy-development/spec.md)** (`openspec/specs/strategy-development/spec.md`)
   - 生命周期函数（initialize, handle_bar, on_order 等）
   - Context 对象接口（账户、行情、下单）
+  - wealthdata 兼容模块（JoinQuant 零代码迁移）
   - Python 策略文件编写规范
   - 策略开发示例
 
@@ -50,6 +51,11 @@ WealthAI 策略规范定义了面向策略实现者的公共接口规范（Proto
   - 快速上手编写 Python 策略
   - 生命周期函数使用示例
   - Context 对象使用指南
+
+- **[JoinQuant 迁移指南](./JoinQuant迁移指南.md)** (`JoinQuant迁移指南.md`)
+  - JoinQuant 用户零代码迁移指南
+  - wealthdata 兼容层使用说明
+  - API 对比和迁移检查清单
 
 - **[示例文档](./spec_example.md)** (`spec_example.md`)
   - 策略下单接口示例

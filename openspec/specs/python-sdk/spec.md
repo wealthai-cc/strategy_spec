@@ -333,6 +333,35 @@ if not is_valid:
 
 ---
 
+### DataFrame 转换支持
+
+Python SDK SHALL 提供工具函数将 Bar 对象转换为 pandas DataFrame 格式，以支持 wealthdata 兼容层。
+
+#### bars_to_dataframe(bars)
+
+将 Bar 对象列表转换为 pandas DataFrame。
+
+**参数**：
+- `bars`：Bar 对象列表
+
+**返回**：
+- pandas DataFrame，包含以下列：
+  - `open`：开盘价（float）
+  - `high`：最高价（float）
+  - `low`：最低价（float）
+  - `close`：收盘价（float）
+  - `volume`：成交量（float）
+- DataFrame 索引为 `close_time`（Bar 的收盘时间戳）
+
+**示例**：
+```python
+from engine.wealthdata import bars_to_dataframe
+
+bars = context.history('BTCUSDT', 20, '1h')
+df = bars_to_dataframe(bars)
+ma = df['close'].mean()  # 使用 pandas 计算均值
+```
+
 **相关文档**：
 - [策略执行引擎规范](../strategy-engine/spec.md)
 - [策略开发规范](../strategy-development/spec.md)

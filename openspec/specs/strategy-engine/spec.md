@@ -328,9 +328,20 @@ Python 策略文件
 1. **接收 ExecRequest**：引擎接收来自策略管理系统的 ExecRequest
 2. **加载策略**：根据策略标识加载对应的 Python 策略文件
 3. **构建 Context**：从 ExecRequest 中提取数据，构建 Context 对象
-4. **事件调度**：根据 trigger_type 调用对应的生命周期函数
-5. **收集订单**：收集策略函数中的订单操作（通过 Context 的下单方法）
-6. **返回响应**：将订单操作转换为 ExecResponse 返回
+4. **设置线程局部存储**：将 Context 设置到线程局部存储，供 wealthdata 模块访问
+5. **事件调度**：根据 trigger_type 调用对应的生命周期函数
+6. **收集订单**：收集策略函数中的订单操作（通过 Context 的下单方法）
+7. **清理线程局部存储**：执行完成后清理 Context（使用 finally 确保清理）
+8. **返回响应**：将订单操作转换为 ExecResponse 返回
+
+### Context 线程局部存储
+
+引擎 SHALL 管理 Context 对象在线程局部存储中的生命周期，以支持 wealthdata 兼容模块：
+
+- **设置 Context**：在执行策略函数前，引擎 SHALL 将 Context 设置到线程局部存储
+- **清理 Context**：在执行完成后（成功或失败），引擎 SHALL 清理线程局部存储中的 Context
+- **线程安全**：每个执行线程 SHALL 有独立的 Context，支持并发策略执行
+- **异常处理**：即使策略执行抛出异常，引擎 SHALL 确保 Context 被正确清理
 
 ### 与现有接口的关系
 

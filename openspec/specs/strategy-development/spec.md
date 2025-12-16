@@ -181,6 +181,37 @@ Context 对象提供统一的接口访问账户、行情和下单功能：
   - `timeframe`：时间分辨率（如 "1h", "1d"）
   - 返回：Bar 对象列表，按时间顺序排列（最早的在前）
 
+#### wealthdata 兼容模块（JoinQuant 兼容）
+
+策略可以使用 `wealthdata` 模块进行数据访问，提供与 JoinQuant jqdatasdk 兼容的接口：
+
+- `import wealthdata`：导入 wealthdata 模块（替代 `import jqdatasdk`）
+- `wealthdata.get_price(symbol, count=None, end_date=None, frequency='1h', ...)`：获取价格数据
+  - 返回：pandas DataFrame，包含 open, high, low, close, volume 列
+  - 与 jqdatasdk.get_price() 接口完全一致
+  - 内部映射到 `context.history()` 方法
+- `wealthdata.get_bars(symbol, count=None, end_date=None, frequency='1h', ...)`：获取 K 线数据
+  - 与 `get_price()` 功能相同，返回格式一致
+
+**使用示例**：
+```python
+import wealthdata  # 替代 import jqdatasdk
+
+def handle_bar(context, bar):
+    # 使用 wealthdata.get_price() - JoinQuant 风格
+    df = wealthdata.get_price(context.symbol, count=20, frequency='1h')
+    ma = df['close'].mean()  # pandas DataFrame 操作
+    
+    if float(bar.close) > ma:
+        context.order_buy(context.symbol, 0.1)
+```
+
+**注意事项**：
+- `wealthdata` 模块通过线程局部存储访问当前执行的 Context
+- 数据范围受限于 ExecRequest 中的 market_data_context
+- 返回 pandas DataFrame 格式，兼容现有 pandas 分析代码
+- 支持零代码修改迁移（只需修改 import 语句）
+
 #### 下单接口
 
 - `context.order_buy(symbol, quantity, price=None)`：买入订单
