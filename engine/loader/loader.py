@@ -66,6 +66,9 @@ class StrategyLoader:
         self._module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self._module)
         
+        # Inject JoinQuant compatibility objects
+        self._inject_compatibility_objects()
+        
         # Extract lifecycle functions
         self._functions = {}
         
@@ -113,4 +116,45 @@ class StrategyLoader:
             True if function exists, False otherwise
         """
         return name in self._functions and self._functions[name] is not None
+    
+    def _inject_compatibility_objects(self):
+        """
+        Inject JoinQuant compatibility objects into strategy module namespace.
+        
+        This includes:
+        - `g`: Global variable object for strategy state
+        - `log`: Logging module
+        - `run_daily`: Scheduled function registration
+        - `order_value`, `order_target`: Order functions
+        - `set_benchmark`, `set_option`, `set_order_cost`: Config functions
+        """
+        if self._module is None:
+            return
+        
+        # Import compatibility modules
+        from engine.compat.g import create_g_object
+        from engine.compat.log import create_log_object
+        from engine.compat.scheduler import create_run_daily_function
+        from engine.compat.order import create_order_functions
+        from engine.compat.config import create_config_functions
+        
+        # Inject g object
+        self._module.g = create_g_object()
+        
+        # Inject log object
+        self._module.log = create_log_object()
+        
+        # Inject run_daily function
+        self._module.run_daily = create_run_daily_function(self._module)
+        
+        # Inject order functions
+        order_funcs = create_order_functions()
+        self._module.order_value = order_funcs['order_value']
+        self._module.order_target = order_funcs['order_target']
+        
+        # Inject config functions
+        config_funcs = create_config_functions(self._module)
+        self._module.set_benchmark = config_funcs['set_benchmark']
+        self._module.set_option = config_funcs['set_option']
+        self._module.set_order_cost = config_funcs['set_order_cost']
 

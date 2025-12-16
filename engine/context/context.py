@@ -6,6 +6,7 @@ Provides unified interface for account, market data, and order operations.
 
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
+from datetime import datetime
 import uuid
 from decimal import Decimal
 
@@ -56,12 +57,97 @@ class Account:
     positions: List[Dict[str, Any]] = field(default_factory=list)
 
 
-@dataclass
 class Portfolio:
-    """Portfolio information."""
-    positions: List[Dict[str, Any]] = field(default_factory=list)
-    total_value: Optional[Dict[str, Any]] = None
-    total_pnl: Optional[Dict[str, Any]] = None
+    """
+    Portfolio information with JoinQuant compatibility.
+    
+    Supports both list and dictionary-style access to positions.
+    """
+    
+    def __init__(self):
+        """Initialize portfolio."""
+        self._positions_list: List[Dict[str, Any]] = []
+        self._positions_dict: Dict[str, Dict[str, Any]] = {}
+        self.total_value: Optional[Dict[str, Any]] = None
+        self.total_pnl: Optional[Dict[str, Any]] = None
+    
+    @property
+    def positions(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get positions as dictionary (JoinQuant compatibility).
+        
+        Returns:
+            Dictionary mapping symbol to position data
+        """
+        return self._positions_dict
+    
+    def set_positions(self, positions: List[Dict[str, Any]]) -> None:
+        """
+        Set positions from list and update dictionary.
+        
+        Args:
+            positions: List of position dictionaries
+        """
+        self._positions_list = positions
+        # Update dictionary
+        self._positions_dict = {}
+        for pos in positions:
+            symbol = pos.get('symbol', '') if isinstance(pos, dict) else getattr(pos, 'symbol', '')
+            if symbol:
+                self._positions_dict[symbol] = pos
+    
+    def get_positions_list(self) -> List[Dict[str, Any]]:
+        """
+        Get positions as list (original format).
+        
+        Returns:
+            List of position dictionaries
+        """
+        return self._positions_list
+    
+    @property
+    def available_cash(self) -> float:
+        """
+        Get available cash for trading (JoinQuant compatibility).
+        
+        Calculated from account balances or available margin.
+        
+        Returns:
+            Available cash amount
+        """
+        # This will be calculated from context.account
+        # For now, return 0 if not set
+        return getattr(self, '_available_cash', 0.0)
+    
+    def set_available_cash(self, value: float) -> None:
+        """
+        Set available cash.
+        
+        Args:
+            value: Available cash amount
+        """
+        self._available_cash = value
+    
+    @property
+    def positions_value(self) -> float:
+        """
+        Get total positions value (JoinQuant compatibility).
+        
+        Returns:
+            Total market value of all positions
+        """
+        # This will be calculated from positions and market prices
+        # For now, return 0 if not set
+        return getattr(self, '_positions_value', 0.0)
+    
+    def set_positions_value(self, value: float) -> None:
+        """
+        Set positions value.
+        
+        Args:
+            value: Total positions value
+        """
+        self._positions_value = value
 
 
 @dataclass
@@ -130,11 +216,97 @@ class Context:
                     volume=latest_bar_data.get("volume", "0"),
                 )
         
+        # Initialize portfolio positions from account
+        self._initialize_portfolio()
+        
         # Order operations collected during execution
         self._order_operations: List[Dict[str, Any]] = []
         
         # Strategy-specific storage
         self._strategy_data: Dict[str, Any] = {}
+    
+    def _initialize_portfolio(self) -> None:
+        """Initialize portfolio from account data."""
+        # Set positions from account
+        if self.account and hasattr(self.account, 'positions'):
+            positions_list = []
+            for pos in self.account.positions:
+                if isinstance(pos, dict):
+                    positions_list.append(pos)
+                else:
+                    # Convert object to dict
+                    pos_dict = {
+                        'symbol': getattr(pos, 'symbol', ''),
+                        'quantity': getattr(pos, 'quantity', 0),
+                        'average_cost_price': getattr(pos, 'average_cost_price', None),
+                        'unrealized_pnl': getattr(pos, 'unrealized_pnl', None),
+                        'position_side': getattr(pos, 'position_side', None),
+                    }
+                    positions_list.append(pos_dict)
+            self.portfolio.set_positions(positions_list)
+        
+        # Calculate available cash from account
+        available_cash = 0.0
+        if self.account:
+            # Try available_margin first
+            if hasattr(self.account, 'available_margin') and self.account.available_margin:
+                if isinstance(self.account.available_margin, dict):
+                    # Sum all available margins
+                    for currency, amount in self.account.available_margin.items():
+                        if isinstance(amount, (int, float)):
+                            available_cash += float(amount)
+                elif isinstance(self.account.available_margin, (int, float)):
+                    available_cash = float(self.account.available_margin)
+            
+            # Fallback to balances
+            if available_cash == 0.0 and hasattr(self.account, 'balances'):
+                for balance in self.account.balances:
+                    if isinstance(balance, dict):
+                        free = balance.get('free', {})
+                        if isinstance(free, dict):
+                            amount = free.get('amount', 0)
+                            if isinstance(amount, (int, float)):
+                                available_cash += float(amount)
+                        elif isinstance(free, (int, float)):
+                            available_cash += float(free)
+        
+        self.portfolio.set_available_cash(available_cash)
+        
+        # Calculate positions value
+        positions_value = 0.0
+        for pos in self.portfolio.get_positions_list():
+            if isinstance(pos, dict):
+                qty = float(pos.get('quantity', 0))
+                # Try to get current price from average_cost_price or use 0
+                price = 0.0
+                if 'average_cost_price' in pos and pos['average_cost_price']:
+                    if isinstance(pos['average_cost_price'], dict):
+                        price = float(list(pos['average_cost_price'].values())[0] if pos['average_cost_price'] else 0)
+                    elif isinstance(pos['average_cost_price'], (int, float)):
+                        price = float(pos['average_cost_price'])
+                # For now, use average cost price as approximation
+                # In real implementation, should use current market price
+                positions_value += qty * price
+        
+        self.portfolio.set_positions_value(positions_value)
+    
+    @property
+    def current_dt(self) -> Optional[datetime]:
+        """
+        Get current datetime (JoinQuant compatibility).
+        
+        Returns:
+            datetime object representing current bar's time, or None if no current_bar
+        """
+        if self.current_bar is None:
+            return None
+        
+        # Convert close_time (Unix timestamp in milliseconds) to datetime
+        close_time_ms = self.current_bar.close_time
+        if close_time_ms == 0:
+            return None
+        
+        return datetime.fromtimestamp(close_time_ms / 1000.0)
     
     def __getattr__(self, name: str) -> Any:
         """Allow strategy to store custom data on context."""
@@ -148,7 +320,7 @@ class Context:
         known_attrs = {
             "account", "portfolio", "_market_data_context", "_incomplete_orders",
             "_completed_orders", "params", "exec_id", "exchange", "current_bar",
-            "_order_operations", "_strategy_data"
+            "current_dt", "_order_operations", "_strategy_data"
         }
         if name not in known_attrs and not name.startswith("_"):
             # Store in strategy data

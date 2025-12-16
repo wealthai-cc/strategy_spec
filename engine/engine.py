@@ -48,7 +48,11 @@ class StrategyExecutionEngine:
         
         # Initialize dispatcher and lifecycle manager
         self.dispatcher = EventDispatcher(strategy_functions)
-        self.lifecycle = LifecycleManager(strategy_functions)
+        # Pass strategy module to lifecycle manager for scheduled functions
+        self.lifecycle = LifecycleManager(
+            strategy_functions,
+            strategy_module=self.loader._module
+        )
         
         self._loaded = True
     
@@ -97,8 +101,9 @@ class StrategyExecutionEngine:
                 self.lifecycle.initialize(context)
                 
                 # Call before_trading if appropriate
-                # (In real implementation, this might be called based on timing)
-                # For now, we'll skip it unless explicitly needed
+                # This will also call registered scheduled functions (run_daily)
+                if self.lifecycle.should_call_before_trading():
+                    self.lifecycle.before_trading(context)
                 
                 # Dispatch trigger event
                 trigger_type = exec_request.get("trigger_type", 0)
@@ -155,56 +160,65 @@ class StrategyExecutionEngine:
     
     def _build_context(self, exec_request: Dict[str, Any]) -> Context:
         """Build Context object from ExecRequest."""
-        # Parse account
+        # Parse account (support both dict and Account object)
         account_data = exec_request.get("account", {})
-        account = Account(
-            account_id=account_data.get("account_id", ""),
-            account_type=account_data.get("account_type", 0),
-            total_net_value=account_data.get("total_net_value"),
-            available_margin=account_data.get("available_margin"),
-            margin_ratio=account_data.get("margin_ratio", 0.0),
-            risk_level=account_data.get("risk_level", 0.0),
-            leverage=account_data.get("leverage", 0.0),
-            balances=account_data.get("balances", []),
-            positions=account_data.get("positions", []),
-        )
+        if isinstance(account_data, Account):
+            account = account_data
+        else:
+            account = Account(
+                account_id=account_data.get("account_id", ""),
+                account_type=account_data.get("account_type", 0),
+                total_net_value=account_data.get("total_net_value"),
+                available_margin=account_data.get("available_margin"),
+                margin_ratio=account_data.get("margin_ratio", 0.0),
+                risk_level=account_data.get("risk_level", 0.0),
+                leverage=account_data.get("leverage", 0.0),
+                balances=account_data.get("balances", []),
+                positions=account_data.get("positions", []),
+            )
         
-        # Parse orders
+        # Parse orders (support both dict and Order objects)
         incomplete_orders_data = exec_request.get("incomplete_orders", [])
         incomplete_orders = []
         for order_data in incomplete_orders_data:
-            incomplete_orders.append(Order(
-                order_id=order_data.get("order_id", ""),
-                unique_id=order_data.get("unique_id", ""),
-                symbol=order_data.get("symbol", ""),
-                direction_type=order_data.get("direction_type", 0),
-                order_type=order_data.get("order_type", 0),
-                qty=order_data.get("qty", 0.0),
-                limit_price=order_data.get("limit_price"),
-                status=order_data.get("status", 0),
-                executed_size=order_data.get("executed_size", 0.0),
-                avg_fill_price=order_data.get("avg_fill_price"),
-                commission=order_data.get("commission"),
-                cancel_reason=order_data.get("cancel_reason"),
-            ))
+            if isinstance(order_data, Order):
+                incomplete_orders.append(order_data)
+            else:
+                incomplete_orders.append(Order(
+                    order_id=order_data.get("order_id", ""),
+                    unique_id=order_data.get("unique_id", ""),
+                    symbol=order_data.get("symbol", ""),
+                    direction_type=order_data.get("direction_type", 0),
+                    order_type=order_data.get("order_type", 0),
+                    qty=order_data.get("qty", 0.0),
+                    limit_price=order_data.get("limit_price"),
+                    status=order_data.get("status", 0),
+                    executed_size=order_data.get("executed_size", 0.0),
+                    avg_fill_price=order_data.get("avg_fill_price"),
+                    commission=order_data.get("commission"),
+                    cancel_reason=order_data.get("cancel_reason"),
+                ))
         
         completed_orders_data = exec_request.get("completed_orders", [])
         completed_orders = []
         for order_data in completed_orders_data:
-            completed_orders.append(Order(
-                order_id=order_data.get("order_id", ""),
-                unique_id=order_data.get("unique_id", ""),
-                symbol=order_data.get("symbol", ""),
-                direction_type=order_data.get("direction_type", 0),
-                order_type=order_data.get("order_type", 0),
-                qty=order_data.get("qty", 0.0),
-                limit_price=order_data.get("limit_price"),
-                status=order_data.get("status", 0),
-                executed_size=order_data.get("executed_size", 0.0),
-                avg_fill_price=order_data.get("avg_fill_price"),
-                commission=order_data.get("commission"),
-                cancel_reason=order_data.get("cancel_reason"),
-            ))
+            if isinstance(order_data, Order):
+                completed_orders.append(order_data)
+            else:
+                completed_orders.append(Order(
+                    order_id=order_data.get("order_id", ""),
+                    unique_id=order_data.get("unique_id", ""),
+                    symbol=order_data.get("symbol", ""),
+                    direction_type=order_data.get("direction_type", 0),
+                    order_type=order_data.get("order_type", 0),
+                    qty=order_data.get("qty", 0.0),
+                    limit_price=order_data.get("limit_price"),
+                    status=order_data.get("status", 0),
+                    executed_size=order_data.get("executed_size", 0.0),
+                    avg_fill_price=order_data.get("avg_fill_price"),
+                    commission=order_data.get("commission"),
+                    cancel_reason=order_data.get("cancel_reason"),
+                ))
         
         # Build Context
         context = Context(

@@ -96,6 +96,21 @@
   - `get_trading_rule(broker, symbol)`：本地开销，返回品种的下单与精度限制
   - `get_commission_rates(broker, symbol)`：本地开销，返回 Maker/Taker 手续费率
 
+## JoinQuant 兼容性
+
+WealthAI 策略框架提供完整的 JoinQuant 兼容层，支持平滑迁移：
+
+- **数据查询 API**：`get_price()`, `get_bars()`, `get_all_securities()`, `get_trade_days()`, `get_index_stocks()`, `get_index_weights()`, `get_fundamentals()`, `get_industry()`, `get_trades()`
+- **兼容功能**：全局变量（`g`）、日志模块（`log`）、定时运行（`run_daily`）、下单函数（`order_value`, `order_target`）、配置函数（`set_benchmark`, `set_option`, `set_order_cost`）
+- **市场类型支持**：股票市场（A股、美股、港股）和加密货币市场（7x24 交易）
+
+**迁移步骤**：
+1. 将 `import jqdata` 改为 `import wealthdata`
+2. 将股票代码改为交易对格式（如 `'000001.XSHE'` → `'BTCUSDT'`）
+3. 其他代码基本无需修改
+
+详细迁移指南请参考：[JoinQuant 迁移指南](./PRD/JoinQuant迁移指南.md)
+
 ## 版本与兼容
 - 语义化版本管理：变更遵循 `MAJOR.MINOR.PATCH`
 - 兼容性：

@@ -186,12 +186,36 @@ Context 对象提供统一的接口访问账户、行情和下单功能：
 策略可以使用 `wealthdata` 模块进行数据访问，提供与 JoinQuant jqdatasdk 兼容的接口：
 
 - `import wealthdata`：导入 wealthdata 模块（替代 `import jqdatasdk`）
+
+**价格数据 API**：
 - `wealthdata.get_price(symbol, count=None, end_date=None, frequency='1h', ...)`：获取价格数据
   - 返回：pandas DataFrame，包含 open, high, low, close, volume 列
   - 与 jqdatasdk.get_price() 接口完全一致
   - 内部映射到 `context.history()` 方法
 - `wealthdata.get_bars(symbol, count=None, end_date=None, frequency='1h', ...)`：获取 K 线数据
   - 与 `get_price()` 功能相同，返回格式一致
+
+**证券信息 API**：
+- `wealthdata.get_all_securities(types=None, date=None)`：获取所有交易对信息
+  - 返回：pandas DataFrame，包含 display_name, name, start_date, end_date, type 列
+  - 从 market_data_context 提取所有唯一交易对
+- `wealthdata.get_trade_days(start_date=None, end_date=None, count=None)`：获取交易日列表
+  - 返回：日期字符串列表（'YYYY-MM-DD' 格式）
+  - 加密货币 7x24 交易，返回所有日期（包括周末）
+
+**指数相关 API**：
+- `wealthdata.get_index_stocks(index_symbol, date=None)`：获取指数成分
+  - 返回：交易对符号列表
+  - 支持 BTC_INDEX, ETH_INDEX, DEFI_INDEX 等
+- `wealthdata.get_index_weights(index_symbol, date=None)`：获取指数权重
+  - 返回：pandas DataFrame，包含 code, weight 列
+
+**财务和分类 API**：
+- `wealthdata.get_fundamentals(valuation, statDate=None, statDateCount=None)`：获取财务数据
+  - 返回：pandas DataFrame（简化适配，返回基本交易对信息或空 DataFrame）
+  - 注意：财务数据概念不完全适用于加密货币，会发出警告
+- `wealthdata.get_industry(security, date=None)`：获取行业分类
+  - 返回：分类字符串（如 'Layer1', 'DeFi', 'Layer2' 等）
 
 **使用示例**：
 ```python
@@ -202,6 +226,15 @@ def handle_bar(context, bar):
     df = wealthdata.get_price(context.symbol, count=20, frequency='1h')
     ma = df['close'].mean()  # pandas DataFrame 操作
     
+    # 获取所有可用交易对
+    all_securities = wealthdata.get_all_securities()
+    
+    # 获取指数成分
+    btc_index_stocks = wealthdata.get_index_stocks('BTC_INDEX')
+    
+    # 获取行业分类
+    category = wealthdata.get_industry(context.symbol)
+    
     if float(bar.close) > ma:
         context.order_buy(context.symbol, 0.1)
 ```
@@ -211,6 +244,7 @@ def handle_bar(context, bar):
 - 数据范围受限于 ExecRequest 中的 market_data_context
 - 返回 pandas DataFrame 格式，兼容现有 pandas 分析代码
 - 支持零代码修改迁移（只需修改 import 语句）
+- 指数和分类数据来自静态配置，可通过配置文件扩展
 
 #### 下单接口
 

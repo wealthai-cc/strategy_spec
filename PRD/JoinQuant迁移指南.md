@@ -91,11 +91,132 @@ df = wealthdata.get_price(
 df = wealthdata.get_bars(
     symbol='BTCUSDT',
     count=20,
-    frequency='1h'
+    frequency='1h'  # 或使用 unit='1h'（JoinQuant 兼容）
 )
 ```
 
-功能与 `get_price()` 相同。
+功能与 `get_price()` 相同。支持 `unit` 参数作为 `frequency` 的别名（JoinQuant 兼容）。
+
+#### get_all_securities()
+
+```python
+df = wealthdata.get_all_securities(
+    types=None,  # 可选，忽略（加密货币不适用）
+    date=None    # 可选，忽略（使用当前上下文数据）
+)
+```
+
+**返回格式**：pandas DataFrame，包含以下列：
+- `display_name`：交易对显示名称（与 name 相同）
+- `name`：交易对符号（DataFrame 索引）
+- `start_date`：不适用（None）
+- `end_date`：不适用（None，表示仍在交易）
+- `type`：'crypto'（所有都是加密货币交易对）
+
+**数据来源**：从 `ExecRequest.market_data_context` 中提取所有唯一的交易对符号
+
+#### get_trade_days()
+
+```python
+days = wealthdata.get_trade_days(
+    start_date='2025-01-01',  # 可选，开始日期
+    end_date='2025-01-31',    # 可选，结束日期
+    count=30                   # 可选，返回最近 N 天
+)
+```
+
+**返回格式**：日期字符串列表（'YYYY-MM-DD' 格式），按时间顺序排列（从早到晚）
+
+**注意**：
+- **加密货币市场**：7x24 交易，返回所有日期（包括周末）
+- **股票市场**：返回实际交易日（排除周末和节假日）
+- 市场类型自动识别（通过标的代码格式）
+
+#### get_index_stocks()
+
+```python
+stocks = wealthdata.get_index_stocks(
+    index_symbol='BTC_INDEX',  # 指数标识符
+    date=None                   # 可选，忽略（返回当前成分）
+)
+```
+
+**返回格式**：交易对符号列表（如 `['BTCUSDT', 'ETHUSDT', ...]`）
+
+**支持的指数**：
+- `BTC_INDEX` - BTC 指数
+- `ETH_INDEX` - ETH 指数
+- `DEFI_INDEX` - DeFi 指数
+- `LAYER1_INDEX` - Layer1 指数
+- `LAYER2_INDEX` - Layer2 指数
+
+#### get_index_weights()
+
+```python
+df = wealthdata.get_index_weights(
+    index_symbol='BTC_INDEX',  # 指数标识符
+    date=None                   # 可选，忽略（返回当前权重）
+)
+```
+
+**返回格式**：pandas DataFrame，包含以下列：
+- `code`：交易对符号（DataFrame 索引）
+- `weight`：权重（0.0 到 1.0 之间）
+
+#### get_fundamentals()
+
+```python
+df = wealthdata.get_fundamentals(
+    valuation={'code': 'BTCUSDT'},  # 简化的查询对象（dict 或 None）
+    statDate=None,                   # 可选，忽略
+    statDateCount=None               # 可选，忽略
+)
+```
+
+**返回格式**：pandas DataFrame，包含基本交易对信息（如果可用）或空 DataFrame
+
+**注意**：财务数据概念不完全适用于加密货币，此函数会发出警告并返回有限数据
+
+#### get_trades()
+
+```python
+trades = wealthdata.get_trades()
+```
+
+**返回格式**：字典，键为订单 ID，值为成交记录字典，包含：
+- `security`：交易对符号
+- `price`：成交价格
+- `amount`：成交数量
+- `time`：成交时间
+- `order_id`：订单 ID
+
+**使用示例**：
+```python
+def after_market_close(context):
+    trades = wealthdata.get_trades()
+    for order_id, trade in trades.items():
+        log.info(f"成交: {trade['security']} @ {trade['price']}, 数量: {trade['amount']}")
+```
+
+#### get_industry()
+
+```python
+category = wealthdata.get_industry(
+    security='BTCUSDT',  # 交易对符号
+    date=None            # 可选，忽略（返回当前分类）
+)
+```
+
+**返回格式**：分类字符串（如 'Layer1', 'DeFi', 'Layer2', 'Exchange' 等）
+
+**支持的分类**：
+- `Layer1` - 第一层区块链（BTC, ETH, SOL 等）
+- `Layer2` - 第二层解决方案（MATIC, ARB, OP 等）
+- `DeFi` - 去中心化金融（UNI, AAVE, LINK 等）
+- `Exchange` - 交易所代币（BNB, FTT 等）
+- `Meme` - 模因币（DOGE, SHIB 等）
+- `Gaming` - 游戏/Metaverse（AXS, SAND 等）
+- `Storage` - 存储（FIL, AR 等）
 
 ### 数据格式对比
 
@@ -177,12 +298,16 @@ context.order_sell(context.symbol, 0.1)  # 卖出 0.1 BTC，市价
 
 ### 代码修改
 
-- [ ] 将 `import jqdatasdk` 改为 `import wealthdata`
+- [ ] 将 `import jqdatasdk` 或 `import jqdata` 改为 `import wealthdata`
 - [ ] 将股票代码改为交易对格式（如 `'000001.XSHE'` → `'BTCUSDT'`）
-- [ ] 将 `order_buy()` 改为 `context.order_buy()`
-- [ ] 将 `order_sell()` 改为 `context.order_sell()`
+- [ ] 将 `order_buy()` 改为 `context.order_buy()` 或使用 `order_value()` / `order_target()`
+- [ ] 将 `order_sell()` 改为 `context.order_sell()` 或使用 `order_target()`
 - [ ] 将 `'daily'` 改为 `'1d'`（如果使用）
 - [ ] 检查数量单位（股 → 币，如 100 → 0.1）
+- [ ] 如果使用 `get_bars()` 的 `unit` 参数，可以保持不变（已兼容）
+- [ ] 如果使用 `g` 全局变量，无需修改（自动注入）
+- [ ] 如果使用 `log` 模块，无需修改（自动注入）
+- [ ] 如果使用 `run_daily()`，无需修改（自动注入）
 
 ### 代码验证
 
@@ -207,12 +332,15 @@ context.order_sell(context.symbol, 0.1)  # 卖出 0.1 BTC，市价
 
 ### Q4：是否支持所有 jqdatasdk API？
 
-**A**：目前支持最常用的 API：
+**A**：目前支持以下 API：
 - ✅ `get_price()` - 完全支持
 - ✅ `get_bars()` - 完全支持
-- ⚠️ `get_fundamentals()` - 暂不支持（计划中）
-- ⚠️ `get_trade_days()` - 暂不支持
-- ⚠️ `get_all_securities()` - 暂不支持
+- ✅ `get_all_securities()` - 完全支持（从 market_data_context 提取）
+- ✅ `get_trade_days()` - 完全支持（适配 7x24 交易）
+- ✅ `get_index_stocks()` - 完全支持（加密货币指数）
+- ✅ `get_index_weights()` - 完全支持（指数权重）
+- ⚠️ `get_fundamentals()` - 简化支持（返回基本交易对信息，有警告）
+- ✅ `get_industry()` - 完全支持（加密货币分类）
 
 ### Q5：如何测试迁移后的策略？
 
@@ -224,7 +352,19 @@ python3 test_strategy.py your_strategy.py
 
 ## 完整迁移示例
 
-查看 `strategy/joinquant_migration_example.py` 获取完整的迁移示例代码。
+### 基础迁移示例
+查看 `strategy/joinquant_migration_example.py` 获取基础的迁移示例代码。
+
+### 新 API 使用示例
+
+#### 指数跟踪策略
+查看 `strategy/index_based_strategy.py` - 使用 `get_index_stocks()` 和 `get_index_weights()` 构建指数跟踪策略
+
+#### 行业轮动策略
+查看 `strategy/industry_rotation_strategy.py` - 使用 `get_all_securities()` 和 `get_industry()` 构建行业轮动策略
+
+#### 综合 API 示例
+查看 `strategy/comprehensive_jqdata_example.py` - 展示所有 wealthdata API 的使用方法
 
 ## 获取帮助
 
@@ -236,5 +376,5 @@ python3 test_strategy.py your_strategy.py
 ---
 
 **最后更新**：2025-12-16  
-**版本**：1.0
+**版本**：2.0（新增 6 个 API 支持：get_all_securities, get_trade_days, get_index_stocks, get_index_weights, get_fundamentals, get_industry）
 
