@@ -224,14 +224,14 @@ python3 test_strategy.py your_strategy.py
 
 ## 完整迁移示例
 
-查看 `examples/joinquant_migration_example.py` 获取完整的迁移示例代码。
+查看 `strategy/joinquant_migration_example.py` 获取完整的迁移示例代码。
 
 ## 获取帮助
 
 如有问题，请：
 1. 查看 [策略开发规范](../openspec/specs/strategy-development/spec.md)
 2. 查看 [策略开发快速开始](./策略开发快速开始.md)
-3. 查看示例代码：`examples/joinquant_migration_example.py`
+3. 查看示例代码：`strategy/joinquant_migration_example.py`
 
 ---
 

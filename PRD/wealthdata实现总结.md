@@ -51,7 +51,7 @@
 
 ### 4. 示例代码
 
-- ✅ `examples/joinquant_migration_example.py` - JoinQuant 迁移示例
+- ✅ `strategy/joinquant_migration_example.py` - JoinQuant 迁移示例
 - ✅ 展示零代码修改迁移方式
 
 ### 5. 文档
@@ -198,7 +198,7 @@ pandas DataFrame
 - `wealthdata.py` (顶层别名)
 - `tests/test_wealthdata.py`
 - `tests/test_wealthdata_integration.py`
-- `examples/joinquant_migration_example.py`
+- `strategy/joinquant_migration_example.py`
 - `PRD/JoinQuant迁移指南.md`
 - `PRD/wealthdata实现总结.md`
 

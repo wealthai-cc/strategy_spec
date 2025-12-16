@@ -57,7 +57,7 @@ def test_ma_strategy():
     print("测试移动平均策略 (simple_ma_strategy.py)")
     print("=" * 70)
     
-    strategy_path = "examples/simple_ma_strategy.py"
+    strategy_path = "strategy/simple_ma_strategy.py"
     
     try:
         # 创建引擎（复用同一个引擎实例，保持初始化状态）

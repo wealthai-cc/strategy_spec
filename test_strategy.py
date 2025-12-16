@@ -139,7 +139,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         strategy_path = sys.argv[1]
     else:
-        strategy_path = "examples/simple_strategy.py"
+        strategy_path = "strategy/simple_strategy.py"
     
     success = test_strategy(strategy_path)
     sys.exit(0 if success else 1)
