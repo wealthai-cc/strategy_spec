@@ -2,7 +2,7 @@
 Unit tests for market type detection.
 """
 
-import pytest
+import unittest
 from engine.compat.market_type import (
     is_stock_market,
     is_crypto_market,
@@ -11,7 +11,7 @@ from engine.compat.market_type import (
 )
 
 
-class TestMarketTypeDetection:
+class TestMarketTypeDetection(unittest.TestCase):
     """Test market type detection functions."""
     
     def test_is_stock_market_a_stock(self):
@@ -101,4 +101,8 @@ class TestMarketTypeDetection:
         """Test market type detection for malformed crypto symbol."""
         # BTC.USDT should be detected as crypto (not stock)
         assert detect_market_type('BTC.USDT') == MarketType.CRYPTO
+
+
+if __name__ == '__main__':
+    unittest.main()
 

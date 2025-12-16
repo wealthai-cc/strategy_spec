@@ -1,0 +1,14 @@
+{
+  "BTCUSDT": {
+    "maker_fee_rate": 0.0002,
+    "taker_fee_rate": 0.0004
+  },
+  "ETHUSDT": {
+    "maker_fee_rate": 0.0002,
+    "taker_fee_rate": 0.0004
+  },
+  "ADAUSDT": {
+    "maker_fee_rate": 0.0002,
+    "taker_fee_rate": 0.0004
+  }
+}

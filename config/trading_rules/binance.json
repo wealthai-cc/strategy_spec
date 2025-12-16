@@ -1,0 +1,32 @@
+{
+  "BTCUSDT": {
+    "symbol": "BTCUSDT",
+    "min_quantity": 0.00001,
+    "quantity_step": 0.00001,
+    "min_price": 0.01,
+    "price_tick": 0.01,
+    "price_precision": 2,
+    "quantity_precision": 5,
+    "max_leverage": 125.0
+  },
+  "ETHUSDT": {
+    "symbol": "ETHUSDT", 
+    "min_quantity": 0.0001,
+    "quantity_step": 0.0001,
+    "min_price": 0.01,
+    "price_tick": 0.01,
+    "price_precision": 2,
+    "quantity_precision": 4,
+    "max_leverage": 75.0
+  },
+  "ADAUSDT": {
+    "symbol": "ADAUSDT",
+    "min_quantity": 1.0,
+    "quantity_step": 1.0,
+    "min_price": 0.0001,
+    "price_tick": 0.0001,
+    "price_precision": 4,
+    "quantity_precision": 0,
+    "max_leverage": 50.0
+  }
+}

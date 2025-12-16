@@ -3,6 +3,7 @@ Unit tests for global variable (g) object.
 """
 
 import pytest
+import tempfile
 from engine.compat.g import create_g_object
 from engine.loader import StrategyLoader
 from pathlib import Path
@@ -47,8 +48,9 @@ def handle_bar(context, bar):
 '''
     
     # Write test strategy to temporary file
-    test_file = Path('/tmp/test_strategy_g.py')
-    test_file.write_text(test_strategy_content)
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as temp_file:
+        temp_file.write(test_strategy_content)
+        test_file = Path(temp_file.name)
     
     try:
         loader = StrategyLoader(str(test_file))
@@ -63,7 +65,14 @@ def handle_bar(context, bar):
             pass
         
         context = MockContext()
-        functions['initialize'](context)
+        
+        # Verify initialize function exists and is callable
+        initialize_func = functions.get('initialize')
+        assert initialize_func is not None, "initialize function should be loaded"
+        assert callable(initialize_func), "initialize should be callable"
+        
+        # Call initialize function
+        initialize_func(context)
         
         # Verify g values were set
         assert loader._module.g.security == 'BTCUSDT'

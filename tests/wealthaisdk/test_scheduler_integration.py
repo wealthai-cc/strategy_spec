@@ -2,7 +2,6 @@
 Unit tests for scheduler integration with lifecycle manager.
 """
 
-import pytest
 from datetime import datetime
 from engine.lifecycle.lifecycle import LifecycleManager
 from engine.compat.scheduler import create_run_daily_function, get_scheduled_functions

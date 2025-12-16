@@ -15,6 +15,7 @@ setup(
         "protobuf>=4.21.0",
         "grpcio>=1.50.0",
         "grpcio-tools>=1.50.0",
+        "pandas>=1.5.0",  # WealthAI SDK DataFrame 支持
     ],
     extras_require={
         "dev": [
