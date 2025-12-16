@@ -20,7 +20,8 @@
 
 ### 核心模块规格文档
 
-- [策略执行引擎规范](./openspec/specs/strategy-engine/spec.md) - 服务接口、触发机制、执行流程
+- [策略执行引擎规范](./openspec/specs/strategy-engine/spec.md) - 服务接口、触发机制、执行流程、引擎架构
+- [策略开发规范](./openspec/specs/strategy-development/spec.md) - 生命周期函数、Context 对象、Python 策略开发
 - [账户与持仓规范](./openspec/specs/account/spec.md) - 账户类型、余额、持仓、风控指标
 - [订单管理规范](./openspec/specs/order/spec.md) - 订单类型、状态流转、操作事件
 - [行情数据规范](./openspec/specs/market-data/spec.md) - K线数据、技术指标、多分辨率支持

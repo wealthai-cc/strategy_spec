@@ -6,6 +6,8 @@
 
 策略执行引擎是 WealthAI 量化策略系统的核心组件，负责在策略与策略管理系统之间提供标准化的交互接口。通过定义统一的 Proto3 接口规范，实现策略的无状态执行、多环境复用（回测、仿真、真实交易）以及跨语言支持。
 
+策略执行引擎框架（类似 JoinQuant）作为 StrategySpec 接口的实现层，将 Python 策略文件转换为 gRPC 调用，简化策略开发流程。
+
 ### 目标
 
 - **无状态设计**：策略不保存内部状态，每次执行为纯函数式调用
@@ -13,6 +15,7 @@
 - **多触发支持**：支持行情数据、风控事件、订单状态变更等多种触发机制
 - **幂等保证**：通过执行 ID 确保同一触发事件的重复执行可去重
 - **并发安全**：同一账户的同一策略由系统保证串行执行
+- **简化开发**：通过策略执行引擎框架，支持 Python 策略文件开发，无需直接实现 gRPC 服务
 
 ## 使用场景/用户故事
 
@@ -280,7 +283,67 @@ service StrategySpec {
 
 ---
 
+## 策略执行引擎架构
+
+### 架构概述
+
+策略执行引擎框架作为 StrategySpec 接口的实现层，将 Python 策略文件转换为 gRPC 调用。引擎负责：
+
+1. **策略加载**：加载 Python 策略文件，验证生命周期函数
+2. **事件调度**：将 ExecRequest 触发类型映射到策略生命周期函数
+3. **Context 管理**：从 ExecRequest 构建 Context 对象
+4. **订单收集**：收集策略函数中的订单操作，转换为 ExecResponse
+
+### 架构层次
+
+```
+策略管理系统
+    ↓ (gRPC 调用)
+StrategySpec.Exec(ExecRequest)
+    ↓
+策略执行引擎（Engine）
+    ├── 策略加载器（Strategy Loader）
+    ├── 事件调度器（Event Dispatcher）
+    ├── Context 管理器（Context Manager）
+    └── 生命周期管理器（Lifecycle Manager）
+    ↓
+Python 策略文件
+    ├── initialize(context)
+    ├── before_trading(context)
+    ├── handle_bar(context, bar)
+    ├── on_order(context, order)
+    └── on_risk_event(context, event)
+```
+
+### 事件到函数映射
+
+引擎将 ExecRequest 的触发类型映射到策略生命周期函数：
+
+- `MARKET_DATA_TRIGGER_TYPE` → `handle_bar(context, bar)`
+- `ORDER_STATUS_TRIGGER_TYPE` → `on_order(context, order)`
+- `RISK_MANAGE_TRIGGER_TYPE` → `on_risk_event(context, event)`
+
+### 执行流程
+
+1. **接收 ExecRequest**：引擎接收来自策略管理系统的 ExecRequest
+2. **加载策略**：根据策略标识加载对应的 Python 策略文件
+3. **构建 Context**：从 ExecRequest 中提取数据，构建 Context 对象
+4. **事件调度**：根据 trigger_type 调用对应的生命周期函数
+5. **收集订单**：收集策略函数中的订单操作（通过 Context 的下单方法）
+6. **返回响应**：将订单操作转换为 ExecResponse 返回
+
+### 与现有接口的关系
+
+- StrategySpec.Exec 接口保持不变
+- 引擎作为策略实现，将 Python 策略转换为 Exec 调用
+- 引擎内部处理事件调度和生命周期管理
+- 策略开发者无需直接实现 gRPC 服务
+- 支持两种策略实现方式：
+  - Python 策略文件（通过引擎执行）
+  - 直接实现 gRPC 服务（高级用法）
+
 **相关文档**：
+- [策略开发规范](../strategy-development/spec.md) - Python 策略文件开发指南
 - [账户与持仓规范](../account/spec.md)
 - [订单管理规范](../order/spec.md)
 - [行情数据规范](../market-data/spec.md)

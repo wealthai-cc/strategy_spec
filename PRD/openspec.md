@@ -14,7 +14,14 @@ WealthAI 策略规范定义了面向策略实现者的公共接口规范（Proto
   - 策略服务接口（Health/Exec）
   - 触发机制（行情/风控/订单状态）
   - 执行请求与响应结构
+  - 策略执行引擎架构（类似 JoinQuant）
   - 并发与幂等约定
+
+- **[策略开发规范](../openspec/specs/strategy-development/spec.md)** (`openspec/specs/strategy-development/spec.md`)
+  - 生命周期函数（initialize, handle_bar, on_order 等）
+  - Context 对象接口（账户、行情、下单）
+  - Python 策略文件编写规范
+  - 策略开发示例
 
 - **[账户与持仓规范](../openspec/specs/account/spec.md)** (`openspec/specs/account/spec.md`)
   - 账户类型与货币类型
@@ -38,6 +45,11 @@ WealthAI 策略规范定义了面向策略实现者的公共接口规范（Proto
   - 本地缓存与并发安全
 
 ### 参考文档
+
+- **[策略开发快速开始](./策略开发快速开始.md)** (`策略开发快速开始.md`)
+  - 快速上手编写 Python 策略
+  - 生命周期函数使用示例
+  - Context 对象使用指南
 
 - **[示例文档](./spec_example.md)** (`spec_example.md`)
   - 策略下单接口示例

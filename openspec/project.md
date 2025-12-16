@@ -35,6 +35,8 @@ WealthAI 策略规范（Strategy Spec）定义了面向策略实现者的公共�
 
 ## Domain Context
 - **策略执行**: 策略通过 `Exec` 接口接收触发事件，返回订单操作事件
+- **策略开发框架**: 提供类似 JoinQuant 的策略开发框架，支持 Python 策略文件开发
+- **策略执行引擎**: 将 Python 策略文件转换为 gRPC 调用，简化策略开发流程
 - **账户管理**: 支持模拟账户、现金账户、保证金账户等多种账户类型
 - **订单管理**: 支持市价单、限价单、止损市价单、止损限价单
 - **行情数据**: 支持多分辨率 K 线数据和技术指标（MA/EMA）
@@ -50,6 +52,7 @@ WealthAI 策略规范（Strategy Spec）定义了面向策略实现者的公共�
 - **交易所接口**: 通过 `exchange` 字段标识交易所（如 binance、okx）
 - **Python SDK**: 提供 `get_trading_rule` 和 `get_commission_rates` 本地查询接口
 - **策略管理系统**: 负责触发策略执行、管理账户和订单状态
+- **策略执行引擎**: 实现 StrategySpec 接口，将 Python 策略文件转换为 gRPC 调用
 
 ## OpenSpec 工作流程
 本项目采用 OpenSpec 规范进行需求与开发迭代管理：
