@@ -37,7 +37,13 @@ def bars_to_dataframe(bars: List[Any]) -> pd.DataFrame:
     """
     if not bars:
         # 返回空的 DataFrame，但包含正确的列结构
-        return pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
+        return pd.DataFrame({
+            'open': pd.Series(dtype='float64'),
+            'high': pd.Series(dtype='float64'),
+            'low': pd.Series(dtype='float64'),
+            'close': pd.Series(dtype='float64'),
+            'volume': pd.Series(dtype='float64')
+        })
     
     # 提取数据
     data = []
@@ -71,7 +77,7 @@ def bars_to_dataframe(bars: List[Any]) -> pd.DataFrame:
         data.append(row_data)
     
     # 创建 DataFrame
-    df = pd.DataFrame(data, index=indices)
-    df.index.name = 'close_time'
+    df = pd.DataFrame(data)
+    df.index = pd.Index(indices, name='close_time')
     
     return df

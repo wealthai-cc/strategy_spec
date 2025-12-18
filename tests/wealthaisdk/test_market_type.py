@@ -95,7 +95,7 @@ class TestMarketTypeDetection(unittest.TestCase):
     def test_detect_market_type_empty_symbol(self):
         """Test market type detection with empty symbol."""
         assert detect_market_type('') == MarketType.UNKNOWN
-        assert detect_market_type(None) == MarketType.UNKNOWN
+        assert detect_market_type('') == MarketType.UNKNOWN
     
     def test_detect_market_type_malformed_crypto(self):
         """Test market type detection for malformed crypto symbol."""

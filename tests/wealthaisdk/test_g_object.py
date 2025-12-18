@@ -4,6 +4,8 @@ Unit tests for global variable (g) object.
 
 import pytest
 import tempfile
+from types import SimpleNamespace
+from typing import Any
 from engine.compat.g import create_g_object
 from engine.loader import StrategyLoader
 from pathlib import Path
@@ -57,8 +59,9 @@ def handle_bar(context, bar):
         functions = loader.load()
         
         # Check that g object exists in module
-        assert hasattr(loader._module, 'g')
-        assert loader._module.g is not None
+        assert loader._module is not None, "Module should be loaded after calling load()"
+        assert hasattr(loader._module, 'g'), "Module should have g object injected"
+        assert loader._module.g is not None, "g object should not be None"
         
         # Call initialize to set g values
         class MockContext:
@@ -75,8 +78,11 @@ def handle_bar(context, bar):
         initialize_func(context)
         
         # Verify g values were set
-        assert loader._module.g.security == 'BTCUSDT'
-        assert loader._module.g.ma_period == 20
+        # We already verified loader._module is not None above
+        module = loader._module
+        g_obj: SimpleNamespace = module.g
+        assert g_obj.security == 'BTCUSDT'
+        assert g_obj.ma_period == 20
         
     finally:
         # Clean up
