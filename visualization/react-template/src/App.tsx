@@ -6,7 +6,7 @@
 
 import { useState } from 'react';
 import { useDataLoader } from './hooks/useDataLoader';
-import { KLineChart } from './components/KLineChart';
+import { KLineChartECharts } from './components/KLineChartECharts';
 import { StatisticsPanel } from './components/StatisticsPanel';
 import { DecisionInfo } from './components/DecisionInfo';
 import { OrderMarkers } from './components/OrderMarkers';
@@ -15,16 +15,9 @@ import { StrategyAnalysisPanel } from './components/StrategyAnalysis';
 import './App.css';
 
 function App() {
-  const { data, loading, error, loadFromFile } = useDataLoader();
+  const { data, loading, error } = useDataLoader();
   const [selectedDecisionTimestamp, setSelectedDecisionTimestamp] = useState<number | undefined>();
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      loadFromFile(file);
-    }
-  };
 
   if (loading) {
     return (
@@ -68,29 +61,14 @@ function App() {
           <div style={{ marginBottom: '8px', fontWeight: 'bold' }}>错误信息：</div>
           <div style={{ marginBottom: '16px', fontFamily: 'monospace', fontSize: '12px' }}>{error}</div>
           <div style={{ fontSize: '12px', color: '#999', marginTop: '16px' }}>
-            当前 URL: {window.location.href}
+            请确保已运行策略测试，数据文件应位于: public/latest_report.json
           </div>
-        </div>
-        <div style={{ marginTop: '20px' }}>
-          <input
-            type="file"
-            accept=".json"
-            onChange={handleFileUpload}
-            style={{
-              padding: '8px 16px',
-              fontSize: '14px',
-              cursor: 'pointer',
-            }}
-          />
         </div>
       </div>
     );
   }
 
   if (!data) {
-    const urlParams = new URLSearchParams(window.location.search);
-    const dataUrl = urlParams.get('data');
-    
     return (
       <div style={{
         display: 'flex',
@@ -105,51 +83,9 @@ function App() {
         <h1 style={{ margin: 0, fontSize: '24px', color: '#333' }}>
           策略测试可视化
         </h1>
-        {dataUrl ? (
-          <div style={{ color: '#666', textAlign: 'center', maxWidth: '500px', backgroundColor: '#fff', padding: '16px', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
-            <div style={{ marginBottom: '8px', fontWeight: 'bold' }}>正在加载数据...</div>
-            <div style={{ fontSize: '12px', color: '#999', fontFamily: 'monospace', wordBreak: 'break-all' }}>
-              {dataUrl}
-            </div>
-            {loading && (
-              <div style={{ marginTop: '16px', color: '#2196F3' }}>
-                <div style={{
-                  width: '20px',
-                  height: '20px',
-                  border: '3px solid #f3f3f3',
-                  borderTop: '3px solid #2196F3',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite',
-                  margin: '0 auto',
-                }} />
-              </div>
-            )}
-          </div>
-        ) : (
-          <>
-            <div style={{ color: '#666', textAlign: 'center', maxWidth: '500px' }}>
-              请上传 JSON 数据文件或通过 URL 参数加载数据
-            </div>
-            <div>
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleFileUpload}
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '16px',
-                  cursor: 'pointer',
-                  border: '2px solid #2196F3',
-                  borderRadius: '4px',
-                  backgroundColor: '#fff',
-                }}
-              />
-            </div>
-            <div style={{ fontSize: '12px', color: '#999', marginTop: '20px' }}>
-              提示：也可以通过 URL 参数加载数据，例如：?data=path/to/data.json
-            </div>
-          </>
-        )}
+        <div style={{ color: '#666', textAlign: 'center', maxWidth: '500px' }}>
+          正在加载数据...
+        </div>
       </div>
     );
   }
@@ -182,23 +118,13 @@ function App() {
           </div>
         </div>
 
-        {/* 框架验证面板 */}
-        {data.framework_verification && (
-          <FrameworkVerificationPanel data={data.framework_verification} />
-        )}
-
-        {/* 策略分析面板 */}
-        {data.strategy_analysis && (
-          <StrategyAnalysisPanel data={data.strategy_analysis} />
-        )}
-
         {/* 统计面板 */}
         <StatisticsPanel 
           statistics={data.statistics} 
           metadata={data.metadata} 
         />
 
-        {/* K 线图表 */}
+        {/* K 线图表 - 优先展示 */}
         <div style={{
           marginBottom: '20px',
           padding: '20px',
@@ -209,13 +135,37 @@ function App() {
           <h2 style={{ margin: '0 0 16px 0', fontSize: '20px', fontWeight: 'bold' }}>
             K 线图表
           </h2>
-          <KLineChart
+          <KLineChartECharts
             bars={data.bars}
             orders={data.orders}
             decisions={data.decisions}
             height={500}
+            selectedOrderId={selectedOrderId}
+            selectedDecisionTimestamp={selectedDecisionTimestamp}
+            onOrderSelect={setSelectedOrderId}
+            onDecisionSelect={setSelectedDecisionTimestamp}
           />
         </div>
+
+        {/* 决策信息 - 决策归因，优先展示 */}
+        {data.decisions.length > 0 && (
+          <div style={{
+            marginBottom: '20px',
+            padding: '20px',
+            backgroundColor: '#ffffff',
+            borderRadius: '8px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          }}>
+            <h2 style={{ margin: '0 0 16px 0', fontSize: '20px', fontWeight: 'bold' }}>
+              策略决策归因
+            </h2>
+            <DecisionInfo
+              decisions={data.decisions}
+              selectedTimestamp={selectedDecisionTimestamp}
+              onSelect={setSelectedDecisionTimestamp}
+            />
+          </div>
+        )}
 
         {/* 订单标记 */}
         {data.orders.length > 0 && (
@@ -237,24 +187,14 @@ function App() {
           </div>
         )}
 
-        {/* 决策信息 */}
-        {data.decisions.length > 0 && (
-          <div style={{
-            marginBottom: '20px',
-            padding: '20px',
-            backgroundColor: '#ffffff',
-            borderRadius: '8px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          }}>
-            <h2 style={{ margin: '0 0 16px 0', fontSize: '20px', fontWeight: 'bold' }}>
-              策略决策
-            </h2>
-            <DecisionInfo
-              decisions={data.decisions}
-              selectedTimestamp={selectedDecisionTimestamp}
-              onSelect={setSelectedDecisionTimestamp}
-            />
-          </div>
+        {/* 框架验证面板 - 移到底部 */}
+        {data.framework_verification && (
+          <FrameworkVerificationPanel data={data.framework_verification} />
+        )}
+
+        {/* 策略分析面板 - 移到底部 */}
+        {data.strategy_analysis && (
+          <StrategyAnalysisPanel data={data.strategy_analysis} />
         )}
       </div>
     </div>

@@ -39,6 +39,7 @@ class OrderData:
     order_type: str  # 'market', 'limit', etc.
     status: str
     trigger_reason: Optional[str] = None  # 策略逻辑触发条件
+    bar_index: Optional[int] = None  # K线索引（用于回测场景，直接定位到对应的K线）
 
 
 @dataclass
@@ -151,9 +152,20 @@ class VisualizationDataCollector:
                 direction = "unknown"
             
             # 获取价格
-            limit_price = order_data.get("limit_price", {})
+            limit_price = order_data.get("limit_price")
             if limit_price:
-                price = float(limit_price.get("amount", "0"))
+                # 处理不同类型的 limit_price
+                if isinstance(limit_price, dict):
+                    price = float(limit_price.get("amount", "0"))
+                elif isinstance(limit_price, (int, float)):
+                    price = float(limit_price)
+                elif isinstance(limit_price, str):
+                    try:
+                        price = float(limit_price)
+                    except ValueError:
+                        price = 0.0
+                else:
+                    price = 0.0
             else:
                 # 如果没有限价，尝试从其他字段获取
                 price = float(order_data.get("price", "0"))
@@ -184,10 +196,20 @@ class VisualizationDataCollector:
             }
             status = status_map.get(status_enum, "unknown")
             
-            # 获取时间戳（使用当前时间或订单时间）
+            # 获取时间戳（优先使用订单数据中的时间戳，否则使用当前时间）
             timestamp = int(datetime.now().timestamp() * 1000)
             if "timestamp" in order_data:
                 timestamp = int(order_data["timestamp"])
+            # 如果 order_op 中有 bar_time，也尝试使用（用于回测场景）
+            elif "bar_time" in order_op:
+                timestamp = int(order_op["bar_time"])
+            
+            # 获取 bar_index（用于回测场景，直接定位到对应的K线）
+            bar_index = None
+            if "bar_index" in order_op:
+                bar_index = int(order_op["bar_index"])
+            elif "bar_index" in order_data:
+                bar_index = int(order_data["bar_index"])
             
             order = OrderData(
                 order_id=order_data.get("unique_id") or order_data.get("order_id"),
@@ -199,6 +221,7 @@ class VisualizationDataCollector:
                 order_type=order_type,
                 status=status,
                 trigger_reason=trigger_reason,
+                bar_index=bar_index,
             )
             self.orders.append(order)
         except (ValueError, TypeError, KeyError) as e:

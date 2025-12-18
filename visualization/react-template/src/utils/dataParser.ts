@@ -21,7 +21,7 @@ export function parseStrategyData(jsonData: any): StrategyData {
  */
 export function convertBarsToChartData(bars: BarData[]) {
   return bars.map(bar => ({
-    time: (bar.open_time / 1000) as any, // TradingView 使用秒级时间戳
+    time: bar.open_time / 1000, // TradingView 使用秒级时间戳
     open: parseFloat(bar.open),
     high: parseFloat(bar.high),
     low: parseFloat(bar.low),

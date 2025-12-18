@@ -9,8 +9,10 @@
 只需 **3 步**即可完成迁移：
 
 1. **复制策略代码**：将 JoinQuant 策略代码复制到本地
-2. **修改 import 语句**：将 `import jqdatasdk` 改为 `import wealthdata`
+2. **修改 import 语句**：将 `import jqdatasdk` 改为 `from wealthdata import *`（推荐）或 `import wealthdata`
 3. **调整交易品种格式**：将股票代码（如 `'000001.XSHE'`）改为交易对格式（如 `'BTCUSDT'`）
+
+**重要提示**：所有 JoinQuant 兼容的 API（包括 `log`, `g`, `run_daily`, `order_value`, `order_target`, `set_benchmark` 等）都在 `wealthdata` 模块中。使用 `from wealthdata import *` 可以像 JoinQuant 一样直接使用这些函数，无需模块前缀。
 
 ### 示例对比
 
@@ -32,29 +34,57 @@ def handle_bar(context, bar):
         order_buy(context.symbol, 100)  # 买入 100 股
 ```
 
-#### 迁移后的代码
+#### 迁移后的代码（推荐方式：使用 `from wealthdata import *`）
 
 ```python
-import wealthdata  # 只改了这一行！
+from wealthdata import *  # 导入所有 JoinQuant 兼容 API
 
 def initialize(context):
     context.symbol = 'BTCUSDT'  # 改为交易对格式
     context.ma_period = 20
+    
+    # 可以直接使用 log, g, run_daily, set_benchmark 等
+    log.info('策略初始化')
+    g.security = context.symbol
 
 def handle_bar(context, bar):
-    # 代码完全不变！
+    # 直接使用 get_price，无需前缀
+    df = get_price(context.symbol, count=context.ma_period, frequency='1h')
+    ma = df['close'].mean()
+    
+    if float(bar.close) > ma:
+        # 使用 order_value 或 order_target（JoinQuant 风格）
+        order_value(context.symbol, 1000)  # 按金额下单
+```
+
+#### 迁移后的代码（备选方式：使用 `import wealthdata`）
+
+```python
+import wealthdata  # 需要前缀调用
+
+def initialize(context):
+    context.symbol = 'BTCUSDT'
+    context.ma_period = 20
+    
+    # 需要前缀
+    wealthdata.log.info('策略初始化')
+    wealthdata.g.security = context.symbol
+
+def handle_bar(context, bar):
+    # 需要前缀
     df = wealthdata.get_price(context.symbol, count=context.ma_period, frequency='1h')
     ma = df['close'].mean()
     
     if float(bar.close) > ma:
-        context.order_buy(context.symbol, 0.1)  # 改为 context.order_buy()
+        wealthdata.order_value(context.symbol, 1000)
 ```
 
-**变更总结**：
-- ✅ Import 语句：`jqdatasdk` → `wealthdata`（1 行）
+**变更总结**（使用 `from wealthdata import *`）：
+- ✅ Import 语句：`import jqdatasdk` → `from wealthdata import *`（1 行）
 - ✅ 交易品种格式：股票代码 → 交易对（1 行）
-- ✅ 下单 API：`order_buy()` → `context.order_buy()`（框架要求）
+- ✅ 下单 API：`order_buy()` → `order_value()` 或 `order_target()`（JoinQuant 兼容）
 - ✅ **业务逻辑代码：完全不变！**
+- ✅ **所有 JoinQuant API 都可用**：`log`, `g`, `run_daily`, `set_benchmark`, `set_option`, `set_order_cost`, `OrderCost` 等
 
 ## API 兼容性
 
@@ -298,7 +328,7 @@ context.order_sell(context.symbol, 0.1)  # 卖出 0.1 BTC，市价
 
 ### 代码修改
 
-- [ ] 将 `import jqdatasdk` 或 `import jqdata` 改为 `import wealthdata`
+- [ ] 将 `import jqdatasdk` 或 `import jqdata` 改为 `from wealthdata import *`（推荐）或 `import wealthdata`
 - [ ] 将股票代码改为交易对格式（如 `'000001.XSHE'` → `'BTCUSDT'`）
 - [ ] 将 `order_buy()` 改为 `context.order_buy()` 或使用 `order_value()` / `order_target()`
 - [ ] 将 `order_sell()` 改为 `context.order_sell()` 或使用 `order_target()`

@@ -88,6 +88,10 @@ service StrategySpec {
 - `incomplete_orders[]`：所有未完成订单
 - `completed_orders[]`：所有已完成订单（时间范围在策略管理系统配置）
 - `exchange`：交易所名称（用于佣金计算等）
+  - 支持扩展的交易所标识，使用小写字符串（如 "binance", "okx", "bybit"）
+  - 仅支持字母数字和连字符
+  - 默认为 "binance"（向后兼容）
+  - 框架主要支持 Binance，同时保持可扩展性，可通过适配器模式添加其他交易所
 - `exec_id`：执行唯一 ID（用于幂等性保证）
 - `strategy_param`：透传给策略的参数（map<string,string>）
 
@@ -289,9 +293,9 @@ service StrategySpec {
 
 策略执行引擎框架作为 StrategySpec 接口的实现层，将 Python 策略文件转换为 gRPC 调用。引擎负责：
 
-1. **策略加载**：加载 Python 策略文件，验证生命周期函数
+1. **策略加载**：加载 Python 策略文件，验证生命周期函数，设置 `wealthdata` 模块
 2. **事件调度**：将 ExecRequest 触发类型映射到策略生命周期函数
-3. **Context 管理**：从 ExecRequest 构建 Context 对象
+3. **Context 管理**：从 ExecRequest 构建 Context 对象，管理线程局部存储
 4. **订单收集**：收集策略函数中的订单操作，转换为 ExecResponse
 
 ### 架构层次
@@ -328,11 +332,41 @@ Python 策略文件
 1. **接收 ExecRequest**：引擎接收来自策略管理系统的 ExecRequest
 2. **加载策略**：根据策略标识加载对应的 Python 策略文件
 3. **构建 Context**：从 ExecRequest 中提取数据，构建 Context 对象
-4. **设置线程局部存储**：将 Context 设置到线程局部存储，供 wealthdata 模块访问
-5. **事件调度**：根据 trigger_type 调用对应的生命周期函数
-6. **收集订单**：收集策略函数中的订单操作（通过 Context 的下单方法）
-7. **清理线程局部存储**：执行完成后清理 Context（使用 finally 确保清理）
-8. **返回响应**：将订单操作转换为 ExecResponse 返回
+4. **设置 wealthdata 模块**：在策略加载前设置策略特定的 `g` 和 `log` 对象到 `wealthdata` 模块
+5. **设置线程局部存储**：将 Context 和策略模块设置到线程局部存储，供 wealthdata 模块访问
+6. **事件调度**：根据 trigger_type 调用对应的生命周期函数
+7. **收集订单**：收集策略函数中的订单操作（通过 Context 的下单方法）
+8. **清理线程局部存储**：执行完成后清理 Context 和策略模块引用（使用 finally 确保清理）
+9. **返回响应**：将订单操作转换为 ExecResponse 返回
+
+### wealthdata 模块设置和策略加载
+
+引擎 SHALL 在加载策略文件时设置 `wealthdata` 模块，确保所有 JoinQuant 兼容的 API 都可用。
+
+**所有 JoinQuant 兼容的 API SHALL 在 `wealthdata` 模块中定义，引擎只负责设置策略特定的实例（g, log），不进行模块注入。**
+
+- **策略加载前设置 wealthdata 模块**：
+  - **WHEN** 引擎开始加载策略文件
+  - **THEN** 引擎 SHALL 在策略加载之前设置 `wealthdata` 模块：
+    - 创建策略特定的 `g` 对象并设置到 `wealthdata.g`
+    - 创建策略特定的 `log` 对象并设置到 `wealthdata.log`
+    - 设置策略模块到线程局部存储（用于 `run_daily`, `set_benchmark` 等）
+
+- **策略导入 wealthdata**：
+  - **WHEN** 策略文件执行 `from wealthdata import *`
+  - **THEN** 策略 SHALL 能够访问所有 JoinQuant 兼容的 API
+  - **AND** 所有函数和对象都来自 `wealthdata` 模块，无需运行时注入
+
+- **策略模块引用更新**：
+  - **WHEN** 策略文件加载完成
+  - **THEN** 引擎 SHALL 更新策略模块中的 `log` 和 `g` 引用，确保它们指向 `wealthdata` 模块中的最新实例
+  - **AND** 这确保即使策略在导入时获取了引用，也能使用正确的实例
+
+- **无模块注入**：
+  - **WHEN** 引擎加载策略
+  - **THEN** 引擎 SHALL NOT 将函数注入到策略模块的命名空间
+  - **AND** 所有函数和对象都通过 `wealthdata` 模块提供
+  - **AND** 策略必须使用 `from wealthdata import *` 来访问这些功能
 
 ### Context 线程局部存储
 
@@ -342,6 +376,18 @@ Python 策略文件
 - **清理 Context**：在执行完成后（成功或失败），引擎 SHALL 清理线程局部存储中的 Context
 - **线程安全**：每个执行线程 SHALL 有独立的 Context，支持并发策略执行
 - **异常处理**：即使策略执行抛出异常，引擎 SHALL 确保 Context 被正确清理
+- **策略模块清理**：在执行完成后，引擎 SHALL 清理线程局部存储中的策略模块引用
+
+- **Context 设置和清理**：
+  - **WHEN** 引擎开始执行策略函数
+  - **THEN** 引擎 SHALL 在执行前将 Context 设置到线程局部存储
+  - **AND** 在执行完成后（成功或失败），引擎 SHALL 清理线程局部存储中的 Context
+  - **AND** 引擎 SHALL 清理线程局部存储中的策略模块引用
+
+- **异常情况下的清理**：
+  - **WHEN** 策略执行抛出异常
+  - **THEN** 引擎 SHALL 确保 Context 被正确清理（使用 finally 块）
+  - **AND** 引擎 SHALL 确保策略模块引用被正确清理
 
 ### 与现有接口的关系
 

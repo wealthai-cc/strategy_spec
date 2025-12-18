@@ -98,3 +98,4 @@ def create_log_object(output_stream=None) -> Log:
     """
     return Log(output_stream=output_stream)
 
+

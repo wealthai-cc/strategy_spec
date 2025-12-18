@@ -158,3 +158,5 @@ class TestContextExtension:
         assert 'ETHUSDT' in context.portfolio.positions
         assert context.portfolio.positions['ETHUSDT']['quantity'] == 2.0
 
+
+

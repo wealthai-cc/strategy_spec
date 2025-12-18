@@ -32,6 +32,7 @@ export interface BarData {
   low: string;
   close: string;
   volume: string;
+  indicators?: Record<string, string>; // 技术指标数据，如 MA5, MA10, MA20, BB_Upper, BB_Lower, MACD_DIF, RSI 等
 }
 
 export interface OrderData {

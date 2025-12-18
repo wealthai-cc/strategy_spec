@@ -51,8 +51,8 @@ def market_open(context):
     close_data = get_bars(security, count=5, unit='1d', fields=['close'])
     # 取得过去五天的平均价格
     MA5 = close_data['close'].mean()
-    # 取得上一时间点价格（使用 iloc 避免索引问题）
-    current_price = close_data['close'].iloc[-1]
+    # 取得上一时间点价格
+    current_price = close_data['close'][-1]
     # 取得当前的现金
     cash = context.portfolio.available_cash
 

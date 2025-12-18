@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from engine.engine import StrategyExecutionEngine
 from engine.context.context import Account
-from engine.compat.scheduler import get_scheduled_functions
+import wealthdata
 from engine.compat.market_time import is_time_match
 from engine.compat.market_type import detect_market_type, MarketType
 
@@ -116,7 +116,7 @@ def diagnose_strategy(strategy_path: str):
         context = engine._build_context(exec_request)
         engine.lifecycle.initialize(context)
         
-        scheduled = get_scheduled_functions(strategy_module)
+        scheduled = wealthdata.get_scheduled_functions(strategy_module)
         print(f"  注册的定时函数数量: {len(scheduled)}")
         if len(scheduled) == 0:
             warnings.append("⚠️  没有注册任何定时函数（run_daily）")
@@ -266,4 +266,5 @@ if __name__ == "__main__":
         strategy_path = "strategy/double_mean.py"
     
     diagnose_strategy(strategy_path)
+
 

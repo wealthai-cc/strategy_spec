@@ -53,6 +53,11 @@ class StrategyLoader:
         if str(engine_dir) not in sys.path:
             sys.path.insert(0, str(engine_dir))
         
+        # Set up wealthdata module BEFORE loading strategy
+        # This ensures that when strategy executes `from wealthdata import *`,
+        # it gets the correct log and g objects
+        self._setup_wealthdata_before_load()
+        
         # Load module
         module_name = f"strategy_{self.strategy_path.stem}"
         spec = importlib.util.spec_from_file_location(
@@ -64,10 +69,28 @@ class StrategyLoader:
             raise ImportError(f"Cannot load strategy file: {self.strategy_path}")
         
         self._module = importlib.util.module_from_spec(spec)
+        
+        # Set strategy module in thread-local storage BEFORE loading
+        # This is critical because initialize() may call run_daily() during module execution
+        self._set_strategy_module()
+        
+        # Now execute the module (this will execute initialize() which may call run_daily())
         spec.loader.exec_module(self._module)
         
-        # Inject JoinQuant compatibility objects
-        self._inject_compatibility_objects()
+        # Update log, g, run_daily, and order functions references in strategy module after import
+        # This ensures that even if strategy imported from wealthdata before we set them,
+        # the references in the strategy module point to the correct objects
+        import wealthdata
+        if hasattr(self._module, 'log'):
+            self._module.log = wealthdata.log
+        if hasattr(self._module, 'g'):
+            self._module.g = wealthdata.g
+        if hasattr(self._module, 'run_daily'):
+            self._module.run_daily = wealthdata.run_daily
+        if hasattr(self._module, 'order_value'):
+            self._module.order_value = wealthdata.order_value
+        if hasattr(self._module, 'order_target'):
+            self._module.order_target = wealthdata.order_target
         
         # Extract lifecycle functions
         self._functions = {}
@@ -117,44 +140,34 @@ class StrategyLoader:
         """
         return name in self._functions and self._functions[name] is not None
     
-    def _inject_compatibility_objects(self):
+    def _setup_wealthdata_before_load(self):
         """
-        Inject JoinQuant compatibility objects into strategy module namespace.
+        Set up wealthdata module BEFORE strategy is loaded.
         
-        This includes:
-        - `g`: Global variable object for strategy state
-        - `log`: Logging module
-        - `run_daily`: Scheduled function registration
-        - `order_value`, `order_target`: Order functions
-        - `set_benchmark`, `set_option`, `set_order_cost`: Config functions
+        This ensures that when strategy executes `from wealthdata import *`,
+        it gets the correct log and g objects.
+        """
+        import wealthdata
+        from types import SimpleNamespace
+        import sys
+        
+        # Create strategy-specific instances and set them in wealthdata module
+        # This must be done BEFORE the strategy module is loaded,
+        # so that `from wealthdata import *` gets the correct objects
+        # Use wealthdata.Log class directly (defined in wealthdata module)
+        wealthdata.g = SimpleNamespace()
+        wealthdata.log = wealthdata.Log(output_stream=sys.stdout)
+    
+    def _set_strategy_module(self):
+        """
+        Set strategy module in thread-local storage.
+        
+        This is called AFTER the strategy module is loaded,
+        so that run_daily, set_benchmark, etc. can access the module.
         """
         if self._module is None:
             return
         
-        # Import compatibility modules
-        from engine.compat.g import create_g_object
-        from engine.compat.log import create_log_object
-        from engine.compat.scheduler import create_run_daily_function
-        from engine.compat.order import create_order_functions
-        from engine.compat.config import create_config_functions
-        
-        # Inject g object
-        self._module.g = create_g_object()
-        
-        # Inject log object
-        self._module.log = create_log_object()
-        
-        # Inject run_daily function
-        self._module.run_daily = create_run_daily_function(self._module)
-        
-        # Inject order functions
-        order_funcs = create_order_functions()
-        self._module.order_value = order_funcs['order_value']
-        self._module.order_target = order_funcs['order_target']
-        
-        # Inject config functions
-        config_funcs = create_config_functions(self._module)
-        self._module.set_benchmark = config_funcs['set_benchmark']
-        self._module.set_option = config_funcs['set_option']
-        self._module.set_order_cost = config_funcs['set_order_cost']
+        import wealthdata
+        wealthdata._set_strategy_module(self._module)
 

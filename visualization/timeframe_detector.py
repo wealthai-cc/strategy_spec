@@ -87,11 +87,14 @@ def parse_timeframe_count(strategy_code: str, timeframe: str) -> int:
         if match:
             try:
                 count = int(match.group(1))
-                # 返回一个合理的数量（至少是 count 的 1.5 倍，确保有足够的数据）
-                return max(count * 2, 20)
+                # 返回一个合理的数量（至少是 count 的 2 倍，确保有足够的数据）
+                # 但至少生成 200 根K线，以便有足够的数据进行回测和可视化
+                return max(count * 2, 200)
             except ValueError:
                 pass
     
-    # 默认返回 20 根K线
-    return 20
+    # 默认返回 200 根K线（之前是20，现在改为200以提供更充足的数据）
+    return 200
+
+
 

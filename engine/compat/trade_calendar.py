@@ -196,3 +196,5 @@ def get_calendar() -> TradeCalendar:
     """Get global trade calendar instance."""
     return _calendar
 
+
+

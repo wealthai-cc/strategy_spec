@@ -60,7 +60,7 @@
   - `market_data_context[]`：行情上下文（支持多分辨率）
   - `account`：账户信息（含风控指标）
   - `incomplete_orders/completed_orders`：订单集合
-  - `exchange`：交易所名称（用于佣金计算等）
+  - `exchange`：交易所名称（用于佣金计算等）。支持扩展的交易所标识（如 "binance", "okx", "bybit"），使用小写字符串，默认为 "binance"
   - `exec_id`：执行幂等 ID
   - `strategy_param`：透传策略参数
 - `ExecResponse` 执行反馈：

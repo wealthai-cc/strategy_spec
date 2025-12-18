@@ -97,3 +97,5 @@ def on_order(context, order):
         industry = wealthdata.get_industry(order.symbol)
         print(f"订单成交: {order.symbol} ({industry}), 价格: {order.avg_fill_price}")
 
+
+

@@ -75,8 +75,8 @@ class PreviewServer:
         self.server = socketserver.TCPServer(("", actual_port), CustomHTTPRequestHandler)
         self.server.allow_reuse_address = True
         
-        # 在后台线程运行
-        self.server_thread = Thread(target=self.server.serve_forever, daemon=True)
+        # 在后台线程运行（使用非 daemon thread，确保服务器在测试完成后继续运行）
+        self.server_thread = Thread(target=self.server.serve_forever, daemon=False)
         self.server_thread.start()
         
         return actual_port

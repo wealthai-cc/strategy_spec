@@ -155,3 +155,5 @@ def handle_bar(context, bar):
     finally:
         os.unlink(strategy_path)
 
+
+

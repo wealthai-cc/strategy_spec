@@ -76,12 +76,12 @@ class LifecycleManager:
         if self.strategy_module is None:
             return
         
-        from engine.compat.scheduler import get_scheduled_functions
+        import wealthdata
         from engine.compat.market_type import detect_market_type, MarketType
         from engine.compat.market_time import is_time_match
         from engine.compat.trade_calendar import get_calendar
         
-        scheduled_funcs = get_scheduled_functions(self.strategy_module)
+        scheduled_funcs = wealthdata.get_scheduled_functions(self.strategy_module)
         if not scheduled_funcs:
             return
         

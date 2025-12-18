@@ -21,11 +21,13 @@ Python SDK 为策略提供本地查询接口，用于获取交易规则和佣金
 **用户故事**：策略需要创建订单，在下单前需要校验数量、价格等参数是否符合交易所要求。
 
 **流程**：
-1. 策略调用 `get_trading_rule("binance", "BTCUSDT")` 获取交易规则
+1. 策略调用 `get_trading_rule("binance", "BTCUSDT")` 获取交易规则（Binance 为主要支持的交易所）
 2. 检查订单数量是否 >= `min_quantity`
 3. 检查数量是否符合 `quantity_step` 的整数倍
 4. 检查价格精度是否符合 `price_precision` 要求
 5. 调整订单参数后创建订单
+
+**扩展支持**：框架通过适配器模式支持扩展其他交易所（如 OKX、Bybit），调用方式相同，适配器自动路由到对应的交易所实现。
 
 ### 场景 2：成本估算
 
@@ -186,6 +188,22 @@ except ParseError as e:
 1. **费率精度**：费率使用小数表示，如 `0.0002` 表示 0.02%
 2. **精度字段**：`price_precision` 和 `quantity_precision` 为整数，表示小数位数
 3. **步进字段**：`price_tick` 和 `quantity_step` 为浮点数，表示最小变动单位
+
+### 交易所适配器模式
+
+Python SDK 通过适配器模式支持多个交易所，提供统一的接口抽象：
+
+1. **适配器接口**：所有交易所适配器必须实现统一的接口
+   - `get_trading_rule(symbol: str) -> dict` - 查询交易规则
+   - `get_commission_rates(symbol: str) -> dict` - 查询佣金费率
+   - `validate_configuration() -> bool` - 验证配置
+   - `get_supported_symbols() -> List[str]` - 获取支持的交易对列表
+
+2. **Binance 优先支持**：Binance 作为主要支持的交易所，提供完整实现作为参考
+
+3. **扩展机制**：新交易所通过实现适配器接口添加支持，无需修改核心代码
+
+4. **错误处理**：不支持的交易所返回 `NotFoundError`，并提供清晰的错误信息
 
 ## 示例与用例
 

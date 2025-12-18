@@ -60,26 +60,26 @@ def bars_to_dataframe(bars: List[Any]) -> pd.DataFrame:
     
     Returns:
         pandas DataFrame with columns: open, high, low, close, volume
-        Index is close_time from Bar objects
+        Index is DatetimeIndex from close_time (allows negative index access like df['close'][-1])
     """
     if not bars:
         # Return empty DataFrame with correct structure
         return pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
     
     data = []
+    timestamps = []
     for bar in bars:
         data.append({
-            'time': bar.close_time,
             'open': float(bar.open),
             'high': float(bar.high),
             'low': float(bar.low),
             'close': float(bar.close),
             'volume': float(bar.volume),
         })
+        # Convert timestamp (milliseconds) to datetime
+        timestamps.append(pd.Timestamp(bar.close_time, unit='ms'))
     
-    df = pd.DataFrame(data)
-    if len(df) > 0:
-        df.set_index('time', inplace=True)
+    df = pd.DataFrame(data, index=pd.DatetimeIndex(timestamps))
     return df
 
 

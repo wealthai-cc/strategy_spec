@@ -57,6 +57,86 @@ class Account:
     positions: List[Dict[str, Any]] = field(default_factory=list)
 
 
+class Position:
+    """
+    Position object for JoinQuant compatibility.
+    
+    Supports attribute access like position.closeable_amount, position.quantity, etc.
+    """
+    
+    def __init__(self, symbol: str, data: Optional[Dict[str, Any]] = None):
+        """
+        Initialize position.
+        
+        Args:
+            symbol: Trading symbol
+            data: Position data dictionary
+        """
+        self.symbol = symbol
+        self._data = data or {}
+        
+        # Set common attributes
+        self.quantity = float(self._data.get('quantity', 0))
+        self.closeable_amount = float(self._data.get('closeable_amount', self.quantity))
+        self.average_cost_price = self._data.get('average_cost_price', 0)
+        self.unrealized_pnl = self._data.get('unrealized_pnl', 0)
+        self.realized_pnl = self._data.get('realized_pnl', 0)
+    
+    def __getattr__(self, name: str) -> Any:
+        """Allow access to additional attributes from data dict."""
+        if name in self._data:
+            return self._data[name]
+        # Return 0 for numeric attributes that don't exist (JoinQuant compatibility)
+        if name in ['closeable_amount', 'quantity', 'total_amount', 'value']:
+            return 0.0
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+
+class PositionsDict:
+    """
+    Dictionary-like object for positions that returns Position objects.
+    
+    JoinQuant compatibility: context.portfolio.positions[symbol] returns a Position object
+    with attributes like closeable_amount, quantity, etc.
+    """
+    
+    def __init__(self, portfolio: 'Portfolio'):
+        """
+        Initialize positions dictionary.
+        
+        Args:
+            portfolio: Portfolio instance
+        """
+        self._portfolio = portfolio
+    
+    def __getitem__(self, symbol: str) -> Position:
+        """Get position for symbol, returns Position object with default values if not found."""
+        # Check if position exists in dictionary
+        if symbol in self._portfolio._positions_dict:
+            pos_data = self._portfolio._positions_dict[symbol]
+            return Position(symbol, pos_data if isinstance(pos_data, dict) else {})
+        # Return default Position object (JoinQuant compatibility - no KeyError)
+        return Position(symbol, {})
+    
+    def __contains__(self, symbol: str) -> bool:
+        """Check if position exists."""
+        return symbol in self._portfolio._positions_dict
+    
+    def keys(self):
+        """Get all position symbols."""
+        return self._portfolio._positions_dict.keys()
+    
+    def values(self):
+        """Get all Position objects."""
+        return [Position(symbol, data if isinstance(data, dict) else {}) 
+                for symbol, data in self._portfolio._positions_dict.items()]
+    
+    def items(self):
+        """Get all (symbol, Position) pairs."""
+        return [(symbol, Position(symbol, data if isinstance(data, dict) else {})) 
+                for symbol, data in self._portfolio._positions_dict.items()]
+
+
 class Portfolio:
     """
     Portfolio information with JoinQuant compatibility.
@@ -72,14 +152,16 @@ class Portfolio:
         self.total_pnl: Optional[Dict[str, Any]] = None
     
     @property
-    def positions(self) -> Dict[str, Dict[str, Any]]:
+    def positions(self) -> PositionsDict:
         """
-        Get positions as dictionary (JoinQuant compatibility).
+        Get positions as dictionary-like object (JoinQuant compatibility).
         
         Returns:
-            Dictionary mapping symbol to position data
+            PositionsDict object that supports context.portfolio.positions[symbol].closeable_amount
         """
-        return self._positions_dict
+        if not hasattr(self, '_positions_dict_wrapper'):
+            self._positions_dict_wrapper = PositionsDict(self)
+        return self._positions_dict_wrapper
     
     def set_positions(self, positions: List[Dict[str, Any]]) -> None:
         """
@@ -232,12 +314,17 @@ class Context:
             positions_list = []
             for pos in self.account.positions:
                 if isinstance(pos, dict):
+                    # Ensure closeable_amount is set (JoinQuant compatibility)
+                    if 'closeable_amount' not in pos:
+                        pos['closeable_amount'] = pos.get('quantity', 0)
                     positions_list.append(pos)
                 else:
                     # Convert object to dict
+                    quantity = float(getattr(pos, 'quantity', 0))
                     pos_dict = {
                         'symbol': getattr(pos, 'symbol', ''),
-                        'quantity': getattr(pos, 'quantity', 0),
+                        'quantity': quantity,
+                        'closeable_amount': quantity,  # JoinQuant compatibility
                         'average_cost_price': getattr(pos, 'average_cost_price', None),
                         'unrealized_pnl': getattr(pos, 'unrealized_pnl', None),
                         'position_side': getattr(pos, 'position_side', None),
@@ -248,25 +335,38 @@ class Context:
         # Calculate available cash from account
         available_cash = 0.0
         if self.account:
-            # Try available_margin first
+            # Try available_margin first (highest priority)
             if hasattr(self.account, 'available_margin') and self.account.available_margin:
                 if isinstance(self.account.available_margin, dict):
-                    # Sum all available margins
-                    for currency, amount in self.account.available_margin.items():
+                    # Check if it's a single currency object like {"currency_type": 1, "amount": 10000.0}
+                    if 'amount' in self.account.available_margin:
+                        amount = self.account.available_margin.get('amount', 0)
                         if isinstance(amount, (int, float)):
-                            available_cash += float(amount)
+                            available_cash = float(amount)
+                    else:
+                        # Currency dict format like {"USDT": 10000.0}
+                        for currency, amount in self.account.available_margin.items():
+                            if isinstance(amount, (int, float)):
+                                available_cash += float(amount)
                 elif isinstance(self.account.available_margin, (int, float)):
                     available_cash = float(self.account.available_margin)
             
-            # Fallback to balances
+            # Fallback to balances if available_margin didn't provide cash
             if available_cash == 0.0 and hasattr(self.account, 'balances'):
                 for balance in self.account.balances:
                     if isinstance(balance, dict):
-                        free = balance.get('free', {})
-                        if isinstance(free, dict):
-                            amount = free.get('amount', 0)
+                        # Check if balance has 'amount' directly (most common format)
+                        if 'amount' in balance:
+                            amount = balance.get('amount', 0)
                             if isinstance(amount, (int, float)):
                                 available_cash += float(amount)
+                        # Or check for 'free' sub-dict (some exchange formats)
+                        elif 'free' in balance:
+                            free = balance.get('free', {})
+                            if isinstance(free, dict):
+                                amount = free.get('amount', 0)
+                                if isinstance(amount, (int, float)):
+                                    available_cash += float(amount)
                         elif isinstance(free, (int, float)):
                             available_cash += float(free)
         

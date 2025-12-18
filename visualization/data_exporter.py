@@ -91,9 +91,104 @@ def _detect_timeframe(bars: list) -> str:
 
 
 def _build_bars_data(bars: list) -> list:
-    """构建 K 线数据"""
-    return [
-        {
+    """构建 K 线数据，包含技术指标"""
+    result = []
+    all_closes = [float(bar.close) for bar in bars]
+    
+    # 计算技术指标（为所有K线计算）
+    def calculate_ma(prices, period):
+        ma_values = []
+        for i in range(len(prices)):
+            if i < period - 1:
+                ma_values.append(prices[i])
+            else:
+                ma = sum(prices[i - period + 1:i + 1]) / period
+                ma_values.append(ma)
+        return ma_values
+    
+    def calculate_ema(prices, period):
+        ema_values = []
+        multiplier = 2.0 / (period + 1)
+        for i in range(len(prices)):
+            if i == 0:
+                ema_values.append(prices[i])
+            elif i < period - 1:
+                ema = sum(prices[:i+1]) / (i + 1)
+                ema_values.append(ema)
+            else:
+                ema = (prices[i] - ema_values[-1]) * multiplier + ema_values[-1]
+                ema_values.append(ema)
+        return ema_values
+    
+    def calculate_bollinger_bands(prices, period=20, std_dev=2.0):
+        upper_band = []
+        middle_band = []
+        lower_band = []
+        for i in range(len(prices)):
+            if i < period - 1:
+                price = prices[i]
+                middle_band.append(price)
+                upper_band.append(price)
+                lower_band.append(price)
+            else:
+                period_prices = prices[i - period + 1:i + 1]
+                ma = sum(period_prices) / period
+                middle_band.append(ma)
+                variance = sum((p - ma) ** 2 for p in period_prices) / period
+                std = variance ** 0.5
+                upper_band.append(ma + std_dev * std)
+                lower_band.append(ma - std_dev * std)
+        return upper_band, middle_band, lower_band
+    
+    def calculate_macd(prices, fast_period=12, slow_period=26, signal_period=9):
+        ema_fast = calculate_ema(prices, fast_period)
+        ema_slow = calculate_ema(prices, slow_period)
+        dif = [ema_fast[i] - ema_slow[i] for i in range(len(prices))]
+        dea = calculate_ema(dif, signal_period)
+        macd_bar = [(dif[i] - dea[i]) * 2 for i in range(len(prices))]
+        return dif, dea, macd_bar
+    
+    def calculate_rsi(prices, period=14):
+        rsi_values = []
+        for i in range(len(prices)):
+            if i < period:
+                rsi_values.append(50.0)
+            else:
+                gains = []
+                losses = []
+                for j in range(i - period + 1, i + 1):
+                    if j > 0:
+                        change = prices[j] - prices[j - 1]
+                        if change > 0:
+                            gains.append(change)
+                            losses.append(0)
+                        else:
+                            gains.append(0)
+                            losses.append(abs(change))
+                avg_gain = sum(gains) / period if gains else 0
+                avg_loss = sum(losses) / period if losses else 0
+                if avg_loss == 0:
+                    rsi = 100.0
+                else:
+                    rs = avg_gain / avg_loss
+                    rsi = 100 - (100 / (1 + rs))
+                rsi_values.append(rsi)
+        return rsi_values
+    
+    # 计算所有指标
+    ma5_values = calculate_ma(all_closes, 5) if len(all_closes) >= 5 else []
+    ma10_values = calculate_ma(all_closes, 10) if len(all_closes) >= 10 else []
+    ma20_values = calculate_ma(all_closes, 20) if len(all_closes) >= 20 else []
+    ma30_values = calculate_ma(all_closes, 30) if len(all_closes) >= 30 else []
+    ema12_values = calculate_ema(all_closes, 12) if len(all_closes) >= 12 else []
+    ema26_values = calculate_ema(all_closes, 26) if len(all_closes) >= 26 else []
+    bb_upper, bb_middle, bb_lower = calculate_bollinger_bands(all_closes, period=20, std_dev=2.0) if len(all_closes) >= 20 else ([], [], [])
+    macd_dif, macd_dea, macd_bar = calculate_macd(all_closes, fast_period=12, slow_period=26, signal_period=9) if len(all_closes) >= 26 else ([], [], [])
+    rsi_values = calculate_rsi(all_closes, period=14) if len(all_closes) >= 14 else []
+    
+    # 构建每个bar的数据，包含指标
+    for i, bar in enumerate(bars):
+        bar_data = {
             "open_time": bar.open_time,
             "close_time": bar.close_time,
             "open": str(bar.open),  # 使用字符串保证精度
@@ -102,8 +197,38 @@ def _build_bars_data(bars: list) -> list:
             "close": str(bar.close),
             "volume": str(bar.volume),
         }
-        for bar in bars
-    ]
+        
+        # 添加技术指标数据
+        indicators = {}
+        if i < len(ma5_values):
+            indicators["MA5"] = str(round(ma5_values[i], 2))
+        if i < len(ma10_values):
+            indicators["MA10"] = str(round(ma10_values[i], 2))
+        if i < len(ma20_values):
+            indicators["MA20"] = str(round(ma20_values[i], 2))
+        if i < len(ma30_values):
+            indicators["MA30"] = str(round(ma30_values[i], 2))
+        if i < len(ema12_values):
+            indicators["EMA12"] = str(round(ema12_values[i], 2))
+        if i < len(ema26_values):
+            indicators["EMA26"] = str(round(ema26_values[i], 2))
+        if i < len(bb_upper):
+            indicators["BB_Upper"] = str(round(bb_upper[i], 2))
+            indicators["BB_Middle"] = str(round(bb_middle[i], 2))
+            indicators["BB_Lower"] = str(round(bb_lower[i], 2))
+        if i < len(macd_dif):
+            indicators["MACD_DIF"] = str(round(macd_dif[i], 2))
+            indicators["MACD_DEA"] = str(round(macd_dea[i], 2))
+            indicators["MACD_Bar"] = str(round(macd_bar[i], 2))
+        if i < len(rsi_values):
+            indicators["RSI"] = str(round(rsi_values[i], 2))
+        
+        if indicators:
+            bar_data["indicators"] = indicators
+        
+        result.append(bar_data)
+    
+    return result
 
 
 def _build_orders_data(orders: list) -> list:
@@ -117,6 +242,7 @@ def _build_orders_data(orders: list) -> list:
             "quantity": order.quantity,
             "timestamp": order.timestamp,
             "order_type": order.order_type,
+            "bar_index": order.bar_index,  # K线索引（用于回测场景）
             "status": order.status,
             "trigger_reason": order.trigger_reason,
         }
@@ -126,19 +252,33 @@ def _build_orders_data(orders: list) -> list:
 
 def _build_decisions_data(decisions: list) -> list:
     """构建决策信息数据"""
-    return [
-        {
+    result = []
+    for decision in decisions:
+        # 处理 indicators：可能是字典或字符串
+        if isinstance(decision.indicators, dict):
+            indicators_dict = {k: str(v) for k, v in decision.indicators.items()}
+        elif isinstance(decision.indicators, str):
+            # 如果是字符串，尝试解析为字典，否则使用空字典
+            try:
+                import json
+                indicators_dict = json.loads(decision.indicators)
+                indicators_dict = {k: str(v) for k, v in indicators_dict.items()}
+            except (json.JSONDecodeError, TypeError, AttributeError):
+                indicators_dict = {}
+        else:
+            indicators_dict = {}
+        
+        result.append({
             "timestamp": decision.timestamp,
             "symbol": decision.symbol,
             "decision_type": decision.decision_type,
-            "indicators": {k: str(v) for k, v in decision.indicators.items()},  # 使用字符串保证精度
+            "indicators": indicators_dict,  # 使用字符串保证精度
             "trigger_condition": decision.trigger_condition,
             "condition_result": decision.condition_result,
             "decision_reason": decision.decision_reason,
             "strategy_state": decision.strategy_state,
-        }
-        for decision in decisions
-    ]
+        })
+    return result
 
 
 def _build_statistics(collector: VisualizationDataCollector) -> Dict[str, Any]:

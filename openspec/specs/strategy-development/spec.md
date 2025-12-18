@@ -183,9 +183,12 @@ Context 对象提供统一的接口访问账户、行情和下单功能：
 
 #### wealthdata 兼容模块（JoinQuant 兼容）
 
-策略可以使用 `wealthdata` 模块进行数据访问，提供与 JoinQuant jqdatasdk 兼容的接口：
+策略 SHALL 使用 `wealthdata` 模块进行数据访问，提供与 JoinQuant jqdatasdk 兼容的接口。
 
-- `import wealthdata`：导入 wealthdata 模块（替代 `import jqdatasdk`）
+**所有 JoinQuant 兼容的 API SHALL 在 `wealthdata` 模块中定义，策略 SHALL 通过 `from wealthdata import *` 访问所有功能。**
+
+- `from wealthdata import *`：导入所有 JoinQuant 兼容的 API（推荐方式）
+- `import wealthdata`：导入 wealthdata 模块（替代 `import jqdatasdk`，需要前缀调用）
 
 **价格数据 API**：
 - `wealthdata.get_price(symbol, count=None, end_date=None, frequency='1h', ...)`：获取价格数据
@@ -216,8 +219,66 @@ Context 对象提供统一的接口访问账户、行情和下单功能：
   - 注意：财务数据概念不完全适用于加密货币，会发出警告
 - `wealthdata.get_industry(security, date=None)`：获取行业分类
   - 返回：分类字符串（如 'Layer1', 'DeFi', 'Layer2' 等）
+- `wealthdata.get_trades()`：获取成交记录
+  - 返回：字典，键为订单 ID，值为成交记录字典
+
+**策略函数 API**：
+- `log`：日志对象，支持 `info()`, `warn()`, `error()`, `debug()`, `set_level()` 方法
+- `g`：全局变量对象，用于存储策略状态
+- `run_daily(func, time='open', reference_security=None)`：注册定时运行函数
+- `order_value(symbol, value, price=None)`：按金额下单
+- `order_target(symbol, target_qty, price=None)`：目标持仓下单
+
+**配置函数 API**：
+- `set_benchmark(security)`：设置基准
+- `set_option(key, value)`：设置选项
+- `set_order_cost(cost, type='stock')`：设置订单成本
+- `OrderCost`：订单成本配置类
 
 **使用示例**：
+```python
+# 推荐方式：使用 from wealthdata import * 导入所有 API
+from wealthdata import *
+
+def initialize(context):
+    # 配置函数
+    set_benchmark('000300.XSHG')
+    set_option('use_real_price', True)
+    set_order_cost(OrderCost(close_tax=0.001, open_commission=0.0003, close_commission=0.0003, min_commission=5), type='stock')
+    
+    # 日志输出
+    log.info('策略初始化完成')
+    
+    # 定时函数
+    run_daily(before_market_open, time='before_open', reference_security='000300.XSHG')
+    
+    # 全局变量
+    g.security = '000001.XSHE'
+
+def before_market_open(context):
+    log.info('开盘前运行')
+
+def handle_bar(context, bar):
+    # 数据访问函数 - 直接使用，无需前缀
+    df = get_price(context.symbol, count=20, frequency='1h')
+    ma = df['close'].mean()  # pandas DataFrame 操作
+    
+    # 获取所有可用交易对
+    all_securities = get_all_securities()
+    
+    # 获取指数成分
+    btc_index_stocks = get_index_stocks('BTC_INDEX')
+    
+    # 获取行业分类
+    category = get_industry(context.symbol)
+    
+    # 下单函数
+    if float(bar.close) > ma:
+        order_value(context.symbol, 1000)  # 按金额下单
+        # 或使用 order_target(context.symbol, 0.1)  # 按目标持仓下单
+```
+
+**或者使用模块前缀方式**：
 ```python
 import wealthdata  # 替代 import jqdatasdk
 
@@ -229,15 +290,32 @@ def handle_bar(context, bar):
     # 获取所有可用交易对
     all_securities = wealthdata.get_all_securities()
     
-    # 获取指数成分
-    btc_index_stocks = wealthdata.get_index_stocks('BTC_INDEX')
-    
-    # 获取行业分类
-    category = wealthdata.get_industry(context.symbol)
-    
+    # 下单函数
     if float(bar.close) > ma:
-        context.order_buy(context.symbol, 0.1)
+        wealthdata.order_value(context.symbol, 1000)
 ```
+
+**使用场景**：
+
+- **Scenario: 策略导入所有 JoinQuant API**
+  - **WHEN** 策略执行 `from wealthdata import *`
+  - **THEN** 所有 JoinQuant 兼容的 API 都可用，包括数据访问函数、策略函数和配置函数
+  - **AND** 所有函数和对象都来自 `wealthdata` 模块，无需运行时注入
+
+- **Scenario: 日志输出可见性**
+  - **WHEN** 策略调用 `log.info()`, `log.debug()`, `log.warn()`, 或 `log.error()`
+  - **THEN** 日志输出必须可见，出现在策略执行的输出中
+  - **AND** 日志格式为 `[LEVEL] message`，其中 LEVEL 为 INFO、DEBUG、WARN 或 ERROR
+
+- **Scenario: 策略隔离**
+  - **WHEN** 多个策略并发执行
+  - **THEN** 每个策略有自己独立的 `g` 和 `log` 对象实例
+  - **AND** 策略之间的状态不会相互干扰
+
+- **Scenario: 无需运行时注入**
+  - **WHEN** 策略使用 `from wealthdata import *`
+  - **THEN** 所有函数和对象都可用，无需引擎进行运行时注入
+  - **AND** 策略模块中不需要额外的导入语句
 
 **注意事项**：
 - `wealthdata` 模块通过线程局部存储访问当前执行的 Context

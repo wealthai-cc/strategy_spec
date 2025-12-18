@@ -5,7 +5,7 @@ Unit tests for scheduler integration with lifecycle manager.
 import pytest
 from datetime import datetime
 from engine.lifecycle.lifecycle import LifecycleManager
-from engine.compat.scheduler import create_run_daily_function, get_scheduled_functions
+import wealthdata
 from engine.context.context import Context, Account
 
 
@@ -19,16 +19,17 @@ class TestSchedulerIntegration:
             pass
         
         strategy_module = MockModule()
-        run_daily = create_run_daily_function(strategy_module)
+        # Set strategy module in wealthdata for run_daily to work
+        wealthdata._set_strategy_module(strategy_module)
         
-        # Register a function
+        # Register a function using wealthdata.run_daily
         def test_func(context):
             pass
         
-        run_daily(test_func, time='before_open', reference_security='000001.XSHE')
+        wealthdata.run_daily(test_func, time='before_open', reference_security='000001.XSHE')
         
         # Check registration
-        scheduled = get_scheduled_functions(strategy_module)
+        scheduled = wealthdata.get_scheduled_functions(strategy_module)
         assert len(scheduled) == 1
         assert scheduled[0]['time'] == 'before_open'
         assert scheduled[0]['reference_security'] == '000001.XSHE'
@@ -40,7 +41,8 @@ class TestSchedulerIntegration:
             pass
         
         strategy_module = MockModule()
-        run_daily = create_run_daily_function(strategy_module)
+        # Set strategy module in wealthdata for run_daily to work
+        wealthdata._set_strategy_module(strategy_module)
         
         # Track if function was called
         called_funcs = []
@@ -51,8 +53,8 @@ class TestSchedulerIntegration:
         def before_trading_func(context):
             called_funcs.append('before_trading')
         
-        # Register scheduled function
-        run_daily(before_market_open, time='before_open', reference_security='BTCUSDT')
+        # Register scheduled function using wealthdata.run_daily
+        wealthdata.run_daily(before_market_open, time='before_open', reference_security='BTCUSDT')
         
         # Create lifecycle manager
         strategy_functions = {
@@ -91,4 +93,5 @@ class TestSchedulerIntegration:
         # Note: Actual time matching depends on current time, so we just verify
         # that the method doesn't crash and can access scheduled functions
         assert 'before_trading' in called_funcs
+
 

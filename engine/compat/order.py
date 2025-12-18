@@ -44,6 +44,11 @@ def create_order_functions() -> Dict[str, Callable]:
             # Stock market: round to integer (whole shares)
             quantity = int(quantity)
         
+        # Check if quantity is valid (must be > 0)
+        if quantity <= 0:
+            raise ValueError(f"Cannot place order: calculated quantity ({quantity}) is zero or negative. "
+                           f"Value: {value}, Price: {price}")
+        
         # Place buy order
         return context.order_buy(symbol, quantity, price)
     
@@ -79,9 +84,16 @@ def create_order_functions() -> Dict[str, Callable]:
         if abs(diff) < 1e-8:  # Already at target (accounting for floating point)
             return None
         elif diff > 0:
+            # Need to buy more
+            # For stock markets, diff is already an integer, so it should be >= 1 if > 0
+            # For crypto markets, allow fractional quantities
             return context.order_buy(symbol, diff, price)
         else:
-            return context.order_sell(symbol, abs(diff), price)
+            # Need to sell (diff < 0)
+            sell_qty = abs(diff)
+            # For stock markets, sell_qty is already an integer, so it should be >= 1 if > 0
+            # For crypto markets, allow fractional quantities
+            return context.order_sell(symbol, sell_qty, price)
     
     return {
         'order_value': order_value,

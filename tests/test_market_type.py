@@ -102,3 +102,5 @@ class TestMarketTypeDetection:
         # BTC.USDT should be detected as crypto (not stock)
         assert detect_market_type('BTC.USDT') == MarketType.CRYPTO
 
+
+

@@ -94,6 +94,12 @@ class StrategyExecutionEngine:
             from .wealthdata import set_context, clear_context
             set_context(context)
             
+            # Set strategy module in thread-local storage (needed for run_daily, set_benchmark, etc.)
+            # This must be set before calling initialize() because initialize() may call run_daily()
+            import wealthdata
+            if self.loader and self.loader._module:
+                wealthdata._set_strategy_module(self.loader._module)
+            
             try:
                 # Initialize strategy if not already done
                 # This ensures context has strategy-specific attributes set
@@ -136,18 +142,22 @@ class StrategyExecutionEngine:
                 }
             
             finally:
-                # Always clear context from thread-local storage
+                # Always clear context and strategy module from thread-local storage
                 clear_context()
+                import wealthdata
+                wealthdata._clear_strategy_module()
         
         except Exception as e:
             # Return error response
             error_msg = str(e)
             traceback_str = traceback.format_exc()
             
-            # Ensure context is cleared even on error
+            # Ensure context and strategy module are cleared even on error
             try:
                 from .wealthdata import clear_context
                 clear_context()
+                import wealthdata
+                wealthdata._clear_strategy_module()
             except Exception:
                 pass  # Ignore errors during cleanup
             
