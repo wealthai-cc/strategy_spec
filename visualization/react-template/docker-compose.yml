@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  visualization:
+    build: .
+    ports:
+      - "8080:80"
+    volumes:
+      # 可选：挂载数据目录
+      - ./data:/data:ro
+    environment:
+      - NODE_ENV=production
+

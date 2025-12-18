@@ -11,12 +11,25 @@
 """
 
 from .data_collector import VisualizationDataCollector
-from .chart_generator import ChartGenerator
-from .report_generator import ReportGenerator
+from .data_exporter import export_to_json
+from .preview_server import PreviewServer
+
+# 可选导入（过渡期需要）
+try:
+    from .chart_generator import ChartGenerator
+    from .report_generator import ReportGenerator
+    HAS_MATPLOTLIB = True
+except ImportError:
+    ChartGenerator = None
+    ReportGenerator = None
+    HAS_MATPLOTLIB = False
 
 __all__ = [
     'VisualizationDataCollector',
+    'export_to_json',
+    'PreviewServer',
     'ChartGenerator',
     'ReportGenerator',
+    'HAS_MATPLOTLIB',
 ]
 

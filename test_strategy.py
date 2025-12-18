@@ -13,9 +13,12 @@
 """
 
 import sys
-import pytest
 import re
 from pathlib import Path
+try:
+    import pytest
+except ImportError:
+    pytest = None  # pytest 是可选的，用于自动化测试
 
 # 添加 engine 到路径
 sys.path.insert(0, str(Path(__file__).parent))
@@ -60,7 +63,7 @@ def _parse_timeframe_interval(timeframe: str) -> Dict[str, int]:
     }
 
 
-def test_strategy(strategy_path: str, output_path: Optional[str] = None):
+def test_strategy(strategy_path: str, output_path: Optional[str] = None, auto_preview: bool = True):
     """
     测试策略文件
     
@@ -583,27 +586,123 @@ def test_strategy(strategy_path: str, output_path: Optional[str] = None):
         # 结束数据收集
         collector.end_test()
         
-        # 总是生成可视化报告
+        strategy_name = Path(strategy_path).stem
+        
+        # 优先生成 JSON 数据文件（供 React 模板使用）
+        json_output_path = output_path.replace('.html', '_data.json') if output_path else f"{strategy_name}_report_data.json"
+        if Path(json_output_path).exists():
+            json_output_path = f"{strategy_name}_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}_data.json"
+        
         try:
-            from visualization.report_generator import ReportGenerator
-            strategy_name = Path(strategy_path).stem
-            if output_path:
-                report_path = output_path
-            else:
-                # 自动命名：如果文件已存在，添加时间戳
-                default_name = f"{strategy_name}_report.html"
-                if Path(default_name).exists():
-                    report_path = f"{strategy_name}_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
-                else:
-                    report_path = default_name
+            json_path = collector.export_to_json(json_output_path)
+            print(f"\n📄 JSON 数据已导出: {json_path}")
             
-            generator = ReportGenerator(collector)
-            generator.generate(report_path)
-            print(f"\n📊 可视化报告已生成: {report_path}")
+            # 自动预览功能
+            if auto_preview:
+                try:
+                    from visualization.preview_server import PreviewServer
+                    import webbrowser
+                    import urllib.parse
+                    
+                    # 检查 React 模板是否运行（尝试多种方式）
+                    react_template_url = "http://localhost:5173"
+                    react_running = False
+                    
+                    # 方法1: 尝试 IPv4 socket 连接
+                    try:
+                        import socket
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.settimeout(1)
+                        result = sock.connect_ex(('127.0.0.1', 5173))
+                        sock.close()
+                        if result == 0:
+                            react_running = True
+                    except Exception:
+                        pass
+                    
+                    # 方法2: 尝试 IPv6 socket 连接
+                    if not react_running:
+                        try:
+                            import socket
+                            sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+                            sock.settimeout(1)
+                            result = sock.connect_ex(('::1', 5173))
+                            sock.close()
+                            if result == 0:
+                                react_running = True
+                        except Exception:
+                            pass
+                    
+                    # 方法3: 尝试 HTTP 请求（即使返回错误也认为服务在运行）
+                    if not react_running:
+                        try:
+                            import urllib.request
+                            urllib.request.urlopen(react_template_url, timeout=1)
+                            react_running = True
+                        except Exception:
+                            # 即使连接失败，也尝试打开（可能是临时问题）
+                            pass
+                    
+                    # 如果检测失败，仍然尝试打开（让浏览器处理）
+                    if not react_running:
+                        print(f"\n⚠️  无法确认 React 模板是否运行，将尝试打开预览")
+                        print(f"   如果预览失败，请确保 React 模板已启动:")
+                        print(f"      cd visualization/react-template && npm run dev")
+                    
+                    # 无论检测结果如何，都尝试打开预览
+                    # 启动 HTTP 服务器
+                    json_file_path = Path(json_path).absolute()
+                    server = PreviewServer(base_dir=json_file_path.parent)
+                    actual_port = server.start()
+                    
+                    # 构建访问 URL
+                    data_url = server.get_url(json_file_path.name, actual_port)
+                    preview_url = f"{react_template_url}?data={urllib.parse.quote(data_url)}"
+                    
+                    print(f"\n🚀 正在打开预览...")
+                    print(f"   数据文件: {data_url}")
+                    print(f"   预览地址: {preview_url}")
+                    
+                    # 打开浏览器
+                    webbrowser.open(preview_url)
+                    print(f"   ✅ 预览已打开（服务器运行在端口 {actual_port}）")
+                    print(f"   💡 提示: 关闭此终端窗口会停止预览服务器")
+                except Exception as e:
+                    print(f"\n⚠️  自动预览失败: {e}")
+                    print(f"   请手动启动 React 模板并上传文件查看")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                print(f"   🚀 使用 React 模板查看:")
+                print(f"      cd visualization/react-template && npm run dev")
+                print(f"      然后在浏览器中上传此文件进行可视化")
         except Exception as e:
-            print(f"\n⚠️  生成可视化报告失败: {e}")
+            print(f"\n⚠️  JSON 导出失败: {e}")
             import traceback
             traceback.print_exc()
+        
+        # 生成 HTML 报告（过渡期，可选，需要 matplotlib）
+        try:
+            from visualization import ReportGenerator, HAS_MATPLOTLIB
+            if not HAS_MATPLOTLIB:
+                print(f"\n⚠️  matplotlib 未安装，跳过 HTML 报告生成")
+                print(f"   如需生成 HTML 报告，请安装: pip install matplotlib")
+            else:
+                if output_path:
+                    report_path = output_path
+                else:
+                    default_name = f"{strategy_name}_report.html"
+                    if Path(default_name).exists():
+                        report_path = f"{strategy_name}_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+                    else:
+                        report_path = default_name
+                
+                generator = ReportGenerator(collector)
+                generator.generate(report_path)
+                print(f"📊 HTML 报告已生成: {report_path} (过渡期保留)")
+        except Exception as e:
+            # HTML 报告是可选的，失败不影响 JSON 导出
+            pass
         
         # 显示警告
         warnings = response.get('warnings', [])
@@ -640,8 +739,10 @@ if __name__ == "__main__":
                         help='策略文件路径')
     parser.add_argument('--output', '-o', type=str, default=None,
                         help='可视化报告输出路径（可选，默认自动命名）')
+    parser.add_argument('--no-preview', action='store_true',
+                        help='禁用自动预览功能')
     
     args = parser.parse_args()
     
-    success = test_strategy(args.strategy_path, output_path=args.output)
+    success = test_strategy(args.strategy_path, output_path=args.output, auto_preview=not args.no_preview)
     sys.exit(0 if success else 1)

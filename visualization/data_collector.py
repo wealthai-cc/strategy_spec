@@ -308,4 +308,17 @@ class VisualizationDataCollector:
             "function_calls": len(self.function_calls),
             "framework_checks": len(self.framework_checks),
         }
+    
+    def export_to_json(self, output_path: str) -> str:
+        """
+        导出数据为 JSON 格式（供 React 模板使用）
+        
+        Args:
+            output_path: 输出文件路径
+        
+        Returns:
+            输出文件的绝对路径
+        """
+        from .data_exporter import export_to_json
+        return export_to_json(self, output_path)
 
