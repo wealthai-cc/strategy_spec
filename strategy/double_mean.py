@@ -1,4 +1,11 @@
 # 导入函数库
+# 添加项目根目录到 Python 路径（用于直接运行测试）
+import sys
+import os
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
 from wealthdata import *
 
 # 类型提示：这些函数在运行时由引擎自动注入，不需要导入

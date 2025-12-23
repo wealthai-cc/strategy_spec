@@ -76,8 +76,10 @@ def test_bars_to_dataframe():
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 2
     assert list(df.columns) == ['open', 'high', 'low', 'close', 'volume']
-    assert df.index[0] == 2000
-    assert df.index[1] == 3000
+    # Index is DatetimeIndex (converted from close_time milliseconds)
+    assert isinstance(df.index, pd.DatetimeIndex)
+    assert df.index[0] == pd.Timestamp(2000, unit='ms')
+    assert df.index[1] == pd.Timestamp(3000, unit='ms')
     assert df.iloc[0]['close'] == 105.0
     assert df.iloc[1]['close'] == 110.0
 

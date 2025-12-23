@@ -1,107 +1,61 @@
 """
-wealthdata module - JoinQuant jqdata compatibility layer
+Data access methods for wealthdata SDK.
 
-Provides module-level API functions compatible with jqdatasdk,
-enabling direct copy-paste of JoinQuant strategy code.
+These methods use the data adapter pattern to access data independently
+of the strategy execution engine context.
 """
 
-import threading
 import warnings
 from typing import Optional, List, Dict, Any
 import pandas as pd
 
-# Thread-local storage for current execution Context
-_context_local = threading.local()
+from ..data_adapter import get_data_adapter
 
 
-def set_context(context: Any) -> None:
+def _bars_to_dataframe(bars: List[Any]) -> pd.DataFrame:
     """
-    Set current execution context (called by execution engine).
+    Convert Bar objects to pandas DataFrame.
     
-    Also registers a data adapter for SDK methods to access data.
-    
-    Args:
-        context: Context object from strategy execution
-    """
-    _context_local.context = context
-    
-    # Register data adapter for SDK methods
-    try:
-        from engine.python_sdk.data_adapter import register_data_adapter
-        from engine.python_sdk.context_data_adapter import ContextDataAdapter
-        
-        adapter = ContextDataAdapter(context)
-        register_data_adapter(adapter)
-    except ImportError:
-        # If SDK modules are not available, skip adapter registration
-        # This allows backward compatibility during migration
-        pass
-
-
-def get_context() -> Optional[Any]:
-    """
-    Get current execution context (called by wealthdata functions).
-    
-    Returns:
-        Context object if available, None otherwise
-    
-    Raises:
-        RuntimeError: If context is not available
-    """
-    context = getattr(_context_local, 'context', None)
-    if context is None:
-        raise RuntimeError(
-            "Context not available. Ensure strategy is executed by the execution engine. "
-            "The engine should set context before calling strategy functions."
-        )
-    return context
-
-
-def clear_context() -> None:
-    """
-    Clear current execution context (called by execution engine after execution).
-    
-    Also clears the data adapter to prevent memory leaks.
-    """
-    if hasattr(_context_local, 'context'):
-        delattr(_context_local, 'context')
-    
-    # Clear data adapter
-    try:
-        from engine.python_sdk.data_adapter import clear_data_adapter
-        clear_data_adapter()
-    except ImportError:
-        # If SDK modules are not available, skip adapter cleanup
-        pass
-
-
-def bars_to_dataframe(bars: List[Any]) -> pd.DataFrame:
-    """
-    Convert Bar objects to pandas DataFrame (compatible with jqdata format).
+    This is a helper function that converts bars to DataFrame format.
+    The actual bars_to_dataframe function remains in the strategy framework.
     
     Args:
         bars: List of Bar objects
     
     Returns:
         pandas DataFrame with columns: open, high, low, close, volume
-        Index is DatetimeIndex from close_time (allows negative index access like df['close'][-1])
+        Index is DatetimeIndex from close_time
     """
     if not bars:
-        # Return empty DataFrame with correct structure
         return pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
     
     data = []
     timestamps = []
     for bar in bars:
+        # Handle both dict and object formats
+        if isinstance(bar, dict):
+            open_val = float(bar.get('open', 0))
+            high_val = float(bar.get('high', 0))
+            low_val = float(bar.get('low', 0))
+            close_val = float(bar.get('close', 0))
+            volume_val = float(bar.get('volume', 0))
+            close_time = bar.get('close_time', 0)
+        else:
+            open_val = float(getattr(bar, 'open', 0))
+            high_val = float(getattr(bar, 'high', 0))
+            low_val = float(getattr(bar, 'low', 0))
+            close_val = float(getattr(bar, 'close', 0))
+            volume_val = float(getattr(bar, 'volume', 0))
+            close_time = getattr(bar, 'close_time', 0)
+        
         data.append({
-            'open': float(bar.open),
-            'high': float(bar.high),
-            'low': float(bar.low),
-            'close': float(bar.close),
-            'volume': float(bar.volume),
+            'open': open_val,
+            'high': high_val,
+            'low': low_val,
+            'close': close_val,
+            'volume': volume_val,
         })
-        # Convert timestamp (milliseconds) to datetime
-        timestamps.append(pd.Timestamp(bar.close_time, unit='ms'))
+        timestamps.append(pd.Timestamp(close_time, unit='ms'))
     
     df = pd.DataFrame(data, index=pd.DatetimeIndex(timestamps))
     return df
@@ -136,19 +90,19 @@ def get_price(
         Index is time (close_time from Bar objects)
     
     Raises:
-        RuntimeError: If context is not available
+        RuntimeError: If data adapter is not registered
         ValueError: If symbol or frequency is invalid
     
     Example:
         ```python
-        import wealthdata
+        from engine.python_sdk.wealthdata import get_price
         
-        def handle_bar(context, bar):
-            df = wealthdata.get_price('BTCUSDT', count=20, frequency='1h')
-            ma = df['close'].mean()
+        df = get_price('BTCUSDT', count=20, frequency='1h')
+        ma = df['close'].mean()
         ```
     """
-    context = get_context()
+    # Get data adapter
+    adapter = get_data_adapter()
     
     # Validate parameters
     if not symbol:
@@ -180,11 +134,11 @@ def get_price(
             UserWarning
         )
     
-    # Get bars from context
-    bars = context.history(symbol, count, timeframe)
+    # Get bars from adapter
+    bars = adapter.get_history(symbol, count, timeframe)
     
     # Convert to DataFrame
-    df = bars_to_dataframe(bars)
+    df = _bars_to_dataframe(bars)
     
     # Filter fields if specified
     if fields is not None:
@@ -232,15 +186,18 @@ def get_bars(
         pandas DataFrame with columns: open, high, low, close, volume
         Index is time (close_time from Bar objects)
     
+    Raises:
+        RuntimeError: If data adapter is not registered
+        ValueError: If symbol or frequency is invalid
+    
     Example:
         ```python
-        import wealthdata
+        from engine.python_sdk.wealthdata import get_bars
         
-        def handle_bar(context, bar):
-            # Using frequency parameter
-            df = wealthdata.get_bars('BTCUSDT', count=20, frequency='1h')
-            # Using unit parameter (JoinQuant compatibility)
-            df = wealthdata.get_bars('BTCUSDT', count=20, unit='1d')
+        # Using frequency parameter
+        df = get_bars('BTCUSDT', count=20, frequency='1h')
+        # Using unit parameter (JoinQuant compatibility)
+        df = get_bars('BTCUSDT', count=20, unit='1d')
         ```
     """
     # Handle unit parameter (JoinQuant compatibility)
@@ -268,479 +225,6 @@ def get_bars(
     )
 
 
-def get_all_securities(
-    types: Optional[List[str]] = None,
-    date: Optional[str] = None
-) -> pd.DataFrame:
-    """
-    Get all securities (trading pairs) information, compatible with jqdatasdk.get_all_securities().
-    
-    This function extracts all unique trading pairs from the current ExecRequest's
-    market_data_context and returns them in a format compatible with jqdatasdk.
-    
-    Args:
-        types: Security types (e.g., ['stock']), ignored for crypto (all are crypto trading pairs)
-        date: Date string, ignored (data is from current context)
-    
-    Returns:
-        pandas DataFrame with columns:
-        - display_name: Trading pair display name (same as name)
-        - name: Trading pair symbol (e.g., 'BTCUSDT')
-        - start_date: Not applicable (None or empty)
-        - end_date: Not applicable (None, meaning still trading)
-        - type: 'crypto' (all are crypto trading pairs)
-        
-        DataFrame index is the trading pair symbol (name)
-    
-    Raises:
-        RuntimeError: If context is not available
-    
-    Example:
-        ```python
-        import wealthdata
-        
-        def handle_bar(context, bar):
-            df = wealthdata.get_all_securities()
-            print(df)  # Shows all available trading pairs
-        ```
-    """
-    context = get_context()
-    
-    # Warn about unsupported parameters
-    if types is not None:
-        warnings.warn(
-            "types parameter is not applicable for cryptocurrency trading and will be ignored. "
-            "All securities are crypto trading pairs.",
-            UserWarning
-        )
-    
-    if date is not None:
-        warnings.warn(
-            f"date parameter ({date}) is ignored. Data is from current ExecRequest context.",
-            UserWarning
-        )
-    
-    # Extract all unique symbols from market_data_context
-    symbols = set()
-    for market_context in context._market_data_context:
-        symbol = market_context.get("symbol")
-        if symbol:
-            symbols.add(symbol)
-    
-    # Build DataFrame matching jqdatasdk format
-    if not symbols:
-        # Return empty DataFrame with correct structure
-        return pd.DataFrame(columns=['display_name', 'name', 'start_date', 'end_date', 'type'])
-    
-    data = []
-    for symbol in sorted(symbols):  # Sort for consistent output
-        data.append({
-            'display_name': symbol,  # For crypto, display name is same as symbol
-            'name': symbol,
-            'start_date': None,  # Not applicable for crypto
-            'end_date': None,  # None means still trading
-            'type': 'crypto',
-        })
-    
-    df = pd.DataFrame(data)
-    df.set_index('name', inplace=True)
-    return df
-
-
-def get_index_stocks(
-    index_symbol: str,
-    date: Optional[str] = None
-) -> List[str]:
-    """
-    Get index constituent stocks (trading pairs), compatible with jqdatasdk.get_index_stocks().
-    
-    This function returns the list of trading pair symbols that are constituents of the index.
-    
-    Args:
-        index_symbol: Index identifier (e.g., 'BTC_INDEX', 'ETH_INDEX', 'DEFI_INDEX')
-        date: Date string, ignored (returns current composition)
-    
-    Returns:
-        List of trading pair symbols (e.g., ['BTCUSDT', 'ETHUSDT'])
-        Returns empty list if index not found
-    
-    Raises:
-        RuntimeError: If context is not available
-        ValueError: If index_symbol is empty
-    
-    Example:
-        ```python
-        import wealthdata
-        
-        def handle_bar(context, bar):
-            # Get BTC index constituents
-            stocks = wealthdata.get_index_stocks('BTC_INDEX')
-            print(stocks)  # ['BTCUSDT', 'ETHUSDT', ...]
-        ```
-    """
-    get_context()  # Verify context is available
-    
-    if not index_symbol:
-        raise ValueError("index_symbol parameter is required")
-    
-    if date is not None:
-        warnings.warn(
-            f"date parameter ({date}) is ignored. Returns current index composition.",
-            UserWarning
-        )
-    
-    # Import index configuration
-    from .index_config import get_index_composition
-    
-    composition = get_index_composition(index_symbol)
-    
-    if not composition:
-        warnings.warn(
-            f"Index '{index_symbol}' not found. Returning empty list.",
-            UserWarning
-        )
-    
-    return composition
-
-
-def get_index_weights(
-    index_symbol: str,
-    date: Optional[str] = None
-) -> pd.DataFrame:
-    """
-    Get index constituent weights, compatible with jqdatasdk.get_index_weights().
-    
-    This function returns the weights of trading pairs in the index.
-    
-    Args:
-        index_symbol: Index identifier (e.g., 'BTC_INDEX', 'ETH_INDEX')
-        date: Date string, ignored (returns current weights)
-    
-    Returns:
-        pandas DataFrame with columns:
-        - code: Trading pair symbol
-        - weight: Weight in index (0.0 to 1.0)
-        DataFrame index is the trading pair symbol (code)
-        Returns empty DataFrame if index not found
-    
-    Raises:
-        RuntimeError: If context is not available
-        ValueError: If index_symbol is empty
-    
-    Example:
-        ```python
-        import wealthdata
-        
-        def handle_bar(context, bar):
-            # Get BTC index weights
-            df = wealthdata.get_index_weights('BTC_INDEX')
-            print(df)  # Shows weights for each trading pair
-        ```
-    """
-    get_context()  # Verify context is available
-    
-    if not index_symbol:
-        raise ValueError("index_symbol parameter is required")
-    
-    if date is not None:
-        warnings.warn(
-            f"date parameter ({date}) is ignored. Returns current index weights.",
-            UserWarning
-        )
-    
-    # Import index configuration
-    from .index_config import get_index_weight_dict
-    
-    weight_dict = get_index_weight_dict(index_symbol)
-    
-    if not weight_dict:
-        warnings.warn(
-            f"Index '{index_symbol}' not found. Returning empty DataFrame.",
-            UserWarning
-        )
-        return pd.DataFrame(columns=['code', 'weight'])
-    
-    # Build DataFrame matching jqdatasdk format
-    data = []
-    for symbol, weight in weight_dict.items():
-        data.append({
-            'code': symbol,
-            'weight': weight,
-        })
-    
-    df = pd.DataFrame(data)
-    df.set_index('code', inplace=True)
-    return df
-
-
-def get_trade_days(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    count: Optional[int] = None
-) -> List[str]:
-    """
-    Get trade days (dates), compatible with jqdatasdk.get_trade_days().
-    
-    Note: Cryptocurrency trades 7x24, so this returns all days in the range
-    (including weekends, unlike stock market).
-    
-    Args:
-        start_date: Start date string (YYYY-MM-DD)
-        end_date: End date string (YYYY-MM-DD)
-        count: Number of days to return (if start_date not provided,
-               returns last count days from available data range)
-    
-    Returns:
-        List of date strings (YYYY-MM-DD format), sorted in ascending order
-        (earliest to latest, matching jqdatasdk behavior)
-    
-    Raises:
-        RuntimeError: If context is not available
-        ValueError: If parameters are invalid
-    
-    Example:
-        ```python
-        import wealthdata
-        
-        def handle_bar(context, bar):
-            # Get all trade days in January 2025
-            days = wealthdata.get_trade_days('2025-01-01', '2025-01-31')
-            print(len(days))  # 31 (includes weekends for crypto)
-        ```
-    """
-    from datetime import datetime, timedelta
-    
-    context = get_context()
-    
-    # Extract time range from market_data_context
-    min_timestamp = None
-    max_timestamp = None
-    
-    for market_context in context._market_data_context:
-        bars = market_context.get("bars", [])
-        for bar in bars:
-            close_time = bar.get("close_time", 0)
-            if close_time > 0:
-                if min_timestamp is None or close_time < min_timestamp:
-                    min_timestamp = close_time
-                if max_timestamp is None or close_time > max_timestamp:
-                    max_timestamp = close_time
-    
-    # If no data available, return empty list
-    if min_timestamp is None or max_timestamp is None:
-        warnings.warn(
-            "No market data available in context. Cannot determine date range.",
-            UserWarning
-        )
-        return []
-    
-    # Convert timestamps to datetime objects
-    min_date = datetime.fromtimestamp(min_timestamp / 1000)
-    max_date = datetime.fromtimestamp(max_timestamp / 1000)
-    
-    # Determine date range based on parameters
-    if start_date and end_date:
-        # Use provided date range
-        start = datetime.strptime(start_date, '%Y-%m-%d')
-        end = datetime.strptime(end_date, '%Y-%m-%d')
-    elif start_date:
-        # From start_date to max available date
-        start = datetime.strptime(start_date, '%Y-%m-%d')
-        end = max_date
-    elif count:
-        # Last count days from available data
-        end = max_date
-        start = end - timedelta(days=count - 1)
-    else:
-        # Use available data range
-        start = min_date
-        end = max_date
-    
-    # Detect market type from context
-    from engine.compat.market_type import detect_market_type, MarketType
-    
-    # Try to detect market type from first symbol in market_data_context
-    market_type = MarketType.CRYPTO  # Default to crypto
-    if context._market_data_context:
-        first_context = context._market_data_context[0]
-        symbol = first_context.get('symbol', '')
-        if symbol:
-            market_type = detect_market_type(symbol, context)
-    
-    # Generate dates based on market type
-    dates = []
-    current = start
-    while current <= end:
-        if market_type == MarketType.CRYPTO:
-            # Cryptocurrency: include all days (7x24 trading)
-            dates.append(current.strftime('%Y-%m-%d'))
-        else:
-            # Stock market: exclude weekends (Saturday=5, Sunday=6)
-            # TODO: Also exclude holidays when trade_calendar is implemented
-            if current.weekday() < 5:  # Monday=0 to Friday=4
-                dates.append(current.strftime('%Y-%m-%d'))
-        current += timedelta(days=1)
-    
-    # Return in ascending order (earliest to latest, matching jqdatasdk)
-    return sorted(dates)
-
-
-def get_fundamentals(
-    valuation: Any,
-    statDate: Optional[str] = None,
-    statDateCount: Optional[int] = None
-) -> pd.DataFrame:
-    """
-    Get fundamentals data, compatible with jqdatasdk.get_fundamentals().
-    
-    Note: Financial data concept doesn't fully apply to cryptocurrency.
-    jqdatasdk uses complex query objects (query(valuation).filter(...)),
-    but for crypto we simplify this to return basic trading pair information
-    or empty DataFrame with warning.
-    
-    Args:
-        valuation: Query object (simplified for crypto - can accept None, dict, or basic object)
-                  If dict, should contain 'code' key with trading pair symbol
-        statDate: Stat date, ignored
-        statDateCount: Stat date count, ignored
-    
-    Returns:
-        pandas DataFrame with basic trading pair info (if available) or empty DataFrame
-        Columns depend on what data is available (e.g., symbol, market_cap, volume_24h)
-        Returns empty DataFrame with warning if financial data is not applicable
-    
-    Raises:
-        RuntimeError: If context is not available
-    
-    Example:
-        ```python
-        import wealthdata
-        
-        def handle_bar(context, bar):
-            # Simplified usage (jqdatasdk uses complex query objects)
-            df = wealthdata.get_fundamentals({'code': 'BTCUSDT'})
-            # Returns basic info or empty DataFrame with warning
-        ```
-    """
-    context = get_context()
-    
-    if statDate is not None:
-        warnings.warn(
-            f"statDate parameter ({statDate}) is ignored for cryptocurrency fundamentals.",
-            UserWarning
-        )
-    
-    if statDateCount is not None:
-        warnings.warn(
-            f"statDateCount parameter ({statDateCount}) is ignored for cryptocurrency fundamentals.",
-            UserWarning
-        )
-    
-    # Extract symbol from valuation if possible
-    symbol = None
-    if valuation is None:
-        pass
-    elif isinstance(valuation, dict):
-        symbol = valuation.get('code')
-    elif hasattr(valuation, 'code'):
-        symbol = getattr(valuation, 'code', None)
-    elif hasattr(valuation, '__iter__') and not isinstance(valuation, str):
-        # Try to extract from iterable
-        try:
-            for item in valuation:
-                if hasattr(item, 'code'):
-                    symbol = getattr(item, 'code')
-                    break
-                elif isinstance(item, dict):
-                    symbol = item.get('code')
-                    break
-        except (TypeError, AttributeError):
-            pass
-    
-    # Warn that financial data doesn't fully apply
-    warnings.warn(
-        "Financial data concept doesn't fully apply to cryptocurrency. "
-        "This function returns limited data or empty DataFrame. "
-        "For crypto, consider using market data APIs instead.",
-        UserWarning
-    )
-    
-    # If we have a symbol, try to return basic info from context
-    if symbol:
-        # Check if symbol exists in market_data_context
-        for market_context in context._market_data_context:
-            if market_context.get("symbol") == symbol:
-                # Return basic info DataFrame
-                bars = market_context.get("bars", [])
-                if bars:
-                    latest_bar = bars[-1]
-                    return pd.DataFrame([{
-                        'code': symbol,
-                        'close': float(latest_bar.get("close", 0)),
-                        'volume': float(latest_bar.get("volume", 0)),
-                        # Note: market_cap and other financial metrics not available
-                    }])
-    
-    # Return empty DataFrame if no data available
-    return pd.DataFrame(columns=['code', 'close', 'volume'])
-
-
-def get_industry(
-    security: str,
-    date: Optional[str] = None
-) -> str:
-    """
-    Get industry (category) for a security (trading pair), compatible with jqdatasdk.get_industry().
-    
-    This function returns the category/industry classification for a cryptocurrency trading pair.
-    
-    Args:
-        security: Trading pair symbol (e.g., 'BTCUSDT')
-        date: Date string, ignored (returns current category)
-    
-    Returns:
-        Industry/category string (e.g., 'Layer1', 'DeFi', 'Layer2', 'Exchange')
-        Returns empty string if category not found
-    
-    Raises:
-        RuntimeError: If context is not available
-        ValueError: If security is empty
-    
-    Example:
-        ```python
-        import wealthdata
-        
-        def handle_bar(context, bar):
-            # Get category for BTC
-            category = wealthdata.get_industry('BTCUSDT')
-            print(category)  # 'Layer1'
-        ```
-    """
-    get_context()  # Verify context is available
-    
-    if not security:
-        raise ValueError("security parameter is required")
-    
-    if date is not None:
-        warnings.warn(
-            f"date parameter ({date}) is ignored. Returns current category.",
-            UserWarning
-        )
-    
-    # Import industry configuration
-    from .industry_config import get_trading_pair_category
-    
-    category = get_trading_pair_category(security)
-    
-    if not category:
-        warnings.warn(
-            f"Category not found for trading pair '{security}'. Returning empty string.",
-            UserWarning
-        )
-    
-    return category
-
-
 def get_trades() -> Dict[str, Dict[str, Any]]:
     """
     Get completed trade records, compatible with JoinQuant's get_trades().
@@ -756,28 +240,24 @@ def get_trades() -> Dict[str, Dict[str, Any]]:
         Dictionary mapping order_id to trade record dictionary
         
     Raises:
-        RuntimeError: If context is not available
+        RuntimeError: If data adapter is not registered
     
     Example:
         ```python
-        import wealthdata
+        from engine.python_sdk.wealthdata import get_trades
         
-        def after_market_close(context):
-            trades = wealthdata.get_trades()
-            for order_id, trade in trades.items():
-                print(f"Trade: {trade['security']} @ {trade['price']}, qty: {trade['amount']}")
+        trades = get_trades()
+        for order_id, trade in trades.items():
+            print(f"Trade: {trade['security']} @ {trade['price']}, qty: {trade['amount']}")
         ```
     """
-    context = get_context()
-    if context is None:
-        raise RuntimeError(
-            "No context available. get_trades() must be called during strategy execution."
-        )
+    # Get data adapter
+    adapter = get_data_adapter()
     
     trades = {}
     
-    # Extract completed orders from context
-    completed_orders = getattr(context, '_completed_orders', [])
+    # Extract completed orders from adapter
+    completed_orders = adapter.get_completed_orders()
     
     for order in completed_orders:
         # Only include filled orders
@@ -838,4 +318,480 @@ def get_trades() -> Dict[str, Dict[str, Any]]:
             trades[order_id] = trade_record
     
     return trades
+
+
+def get_all_securities(
+    types: Optional[List[str]] = None,
+    date: Optional[str] = None
+) -> pd.DataFrame:
+    """
+    Get all securities (trading pairs) information, compatible with jqdatasdk.get_all_securities().
+    
+    This function extracts all unique trading pairs from the data adapter and
+    returns them in a format compatible with jqdatasdk.
+    
+    Args:
+        types: Security types (e.g., ['stock']), ignored for crypto (all are crypto trading pairs)
+        date: Date string, ignored (data is from current context)
+    
+    Returns:
+        pandas DataFrame with columns:
+        - display_name: Trading pair display name (same as name)
+        - name: Trading pair symbol (e.g., 'BTCUSDT')
+        - start_date: Not applicable (None or empty)
+        - end_date: Not applicable (None, meaning still trading)
+        - type: 'crypto' (all are crypto trading pairs)
+        
+        DataFrame index is the trading pair symbol (name)
+    
+    Raises:
+        RuntimeError: If data adapter is not registered
+    
+    Example:
+        ```python
+        from engine.python_sdk.wealthdata import get_all_securities
+        
+        df = get_all_securities()
+        print(df)  # Shows all available trading pairs
+        ```
+    """
+    # Get data adapter
+    adapter = get_data_adapter()
+    
+    # Warn about unsupported parameters
+    if types is not None:
+        warnings.warn(
+            "types parameter is not applicable for cryptocurrency trading and will be ignored. "
+            "All securities are crypto trading pairs.",
+            UserWarning
+        )
+    
+    if date is not None:
+        warnings.warn(
+            f"date parameter ({date}) is ignored. Data is from current context.",
+            UserWarning
+        )
+    
+    # Get all symbols from adapter
+    symbols = adapter.get_all_symbols()
+    
+    # Build DataFrame matching jqdatasdk format
+    if not symbols:
+        # Return empty DataFrame with correct structure
+        return pd.DataFrame(columns=['display_name', 'name', 'start_date', 'end_date', 'type'])
+    
+    data = []
+    for symbol in sorted(symbols):  # Sort for consistent output
+        data.append({
+            'display_name': symbol,  # For crypto, display name is same as symbol
+            'name': symbol,
+            'start_date': None,  # Not applicable for crypto
+            'end_date': None,  # None means still trading
+            'type': 'crypto',
+        })
+    
+    df = pd.DataFrame(data)
+    df.set_index('name', inplace=True)
+    return df
+
+
+def get_trade_days(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    count: Optional[int] = None
+) -> List[str]:
+    """
+    Get trade days (dates), compatible with jqdatasdk.get_trade_days().
+    
+    Note: Cryptocurrency trades 7x24, so this returns all days in the range
+    (including weekends, unlike stock market).
+    
+    Args:
+        start_date: Start date string (YYYY-MM-DD)
+        end_date: End date string (YYYY-MM-DD)
+        count: Number of days to return (if start_date not provided,
+               returns last count days from available data range)
+    
+    Returns:
+        List of date strings (YYYY-MM-DD format), sorted in ascending order
+        (earliest to latest, matching jqdatasdk behavior)
+    
+    Raises:
+        RuntimeError: If data adapter is not registered
+        ValueError: If parameters are invalid
+    
+    Example:
+        ```python
+        from engine.python_sdk.wealthdata import get_trade_days
+        
+        # Get all trade days in January 2025
+        days = get_trade_days('2025-01-01', '2025-01-31')
+        print(len(days))  # 31 (includes weekends for crypto)
+        ```
+    """
+    from datetime import datetime, timedelta
+    
+    # Get data adapter
+    adapter = get_data_adapter()
+    
+    # Extract time range from market_data_context
+    market_data_context = adapter.get_market_data_context()
+    min_timestamp = None
+    max_timestamp = None
+    
+    for market_context in market_data_context:
+        bars = market_context.get("bars", [])
+        for bar in bars:
+            # Handle both dict and object formats
+            if isinstance(bar, dict):
+                close_time = bar.get("close_time", 0)
+            else:
+                close_time = getattr(bar, 'close_time', 0)
+            
+            if close_time > 0:
+                if min_timestamp is None or close_time < min_timestamp:
+                    min_timestamp = close_time
+                if max_timestamp is None or close_time > max_timestamp:
+                    max_timestamp = close_time
+    
+    # If no data available, return empty list
+    if min_timestamp is None or max_timestamp is None:
+        warnings.warn(
+            "No market data available in context. Cannot determine date range.",
+            UserWarning
+        )
+        return []
+    
+    # Convert timestamps to datetime objects
+    min_date = datetime.fromtimestamp(min_timestamp / 1000)
+    max_date = datetime.fromtimestamp(max_timestamp / 1000)
+    
+    # Determine date range based on parameters
+    if start_date and end_date:
+        # Use provided date range
+        start = datetime.strptime(start_date, '%Y-%m-%d')
+        end = datetime.strptime(end_date, '%Y-%m-%d')
+    elif start_date:
+        # From start_date to max available date
+        start = datetime.strptime(start_date, '%Y-%m-%d')
+        end = max_date
+    elif count:
+        # Last count days from available data
+        end = max_date
+        start = end - timedelta(days=count - 1)
+    else:
+        # Use available data range
+        start = min_date
+        end = max_date
+    
+    # Detect market type from context (default to crypto)
+    # For now, assume crypto (7x24 trading)
+    market_type = 'crypto'  # Default to crypto
+    
+    # Generate dates based on market type
+    dates = []
+    current = start
+    while current <= end:
+        if market_type == 'crypto':
+            # Cryptocurrency: include all days (7x24 trading)
+            dates.append(current.strftime('%Y-%m-%d'))
+        else:
+            # Stock market: exclude weekends (Saturday=5, Sunday=6)
+            if current.weekday() < 5:  # Monday=0 to Friday=4
+                dates.append(current.strftime('%Y-%m-%d'))
+        current += timedelta(days=1)
+    
+    # Return in ascending order (earliest to latest, matching jqdatasdk)
+    return sorted(dates)
+
+
+def get_index_stocks(
+    index_symbol: str,
+    date: Optional[str] = None
+) -> List[str]:
+    """
+    Get index constituent stocks (trading pairs), compatible with jqdatasdk.get_index_stocks().
+    
+    This function returns the list of trading pair symbols that are constituents of the index.
+    
+    Args:
+        index_symbol: Index identifier (e.g., 'BTC_INDEX', 'ETH_INDEX', 'DEFI_INDEX')
+        date: Date string, ignored (returns current composition)
+    
+    Returns:
+        List of trading pair symbols (e.g., ['BTCUSDT', 'ETHUSDT'])
+        Returns empty list if index not found
+    
+    Raises:
+        RuntimeError: If data adapter is not registered (for verification)
+        ValueError: If index_symbol is empty
+    
+    Example:
+        ```python
+        from engine.python_sdk.wealthdata import get_index_stocks
+        
+        # Get BTC index constituents
+        stocks = get_index_stocks('BTC_INDEX')
+        print(stocks)  # ['BTCUSDT', 'ETHUSDT', ...]
+        ```
+    """
+    # Verify adapter is registered (for consistency, though not strictly needed for config-based methods)
+    get_data_adapter()
+    
+    if not index_symbol:
+        raise ValueError("index_symbol parameter is required")
+    
+    if date is not None:
+        warnings.warn(
+            f"date parameter ({date}) is ignored. Returns current index composition.",
+            UserWarning
+        )
+    
+    # Import index configuration
+    from engine.wealthdata.index_config import get_index_composition
+    
+    composition = get_index_composition(index_symbol)
+    
+    if not composition:
+        warnings.warn(
+            f"Index '{index_symbol}' not found. Returning empty list.",
+            UserWarning
+        )
+    
+    return composition
+
+
+def get_index_weights(
+    index_symbol: str,
+    date: Optional[str] = None
+) -> pd.DataFrame:
+    """
+    Get index constituent weights, compatible with jqdatasdk.get_index_weights().
+    
+    This function returns the weights of trading pairs in the index.
+    
+    Args:
+        index_symbol: Index identifier (e.g., 'BTC_INDEX', 'ETH_INDEX')
+        date: Date string, ignored (returns current weights)
+    
+    Returns:
+        pandas DataFrame with columns:
+        - code: Trading pair symbol
+        - weight: Weight in index (0.0 to 1.0)
+        DataFrame index is the trading pair symbol (code)
+        Returns empty DataFrame if index not found
+    
+    Raises:
+        RuntimeError: If data adapter is not registered (for verification)
+        ValueError: If index_symbol is empty
+    
+    Example:
+        ```python
+        from engine.python_sdk.wealthdata import get_index_weights
+        
+        # Get BTC index weights
+        df = get_index_weights('BTC_INDEX')
+        print(df)  # Shows weights for each trading pair
+        ```
+    """
+    # Verify adapter is registered (for consistency, though not strictly needed for config-based methods)
+    get_data_adapter()
+    
+    if not index_symbol:
+        raise ValueError("index_symbol parameter is required")
+    
+    if date is not None:
+        warnings.warn(
+            f"date parameter ({date}) is ignored. Returns current index weights.",
+            UserWarning
+        )
+    
+    # Import index configuration
+    from engine.wealthdata.index_config import get_index_weight_dict
+    
+    weight_dict = get_index_weight_dict(index_symbol)
+    
+    if not weight_dict:
+        warnings.warn(
+            f"Index '{index_symbol}' not found. Returning empty DataFrame.",
+            UserWarning
+        )
+        return pd.DataFrame(columns=['code', 'weight'])
+    
+    # Build DataFrame matching jqdatasdk format
+    data = []
+    for symbol, weight in weight_dict.items():
+        data.append({
+            'code': symbol,
+            'weight': weight,
+        })
+    
+    df = pd.DataFrame(data)
+    df.set_index('code', inplace=True)
+    return df
+
+
+def get_fundamentals(
+    valuation: Any,
+    statDate: Optional[str] = None,
+    statDateCount: Optional[int] = None
+) -> pd.DataFrame:
+    """
+    Get fundamentals data, compatible with jqdatasdk.get_fundamentals().
+    
+    Note: Financial data concept doesn't fully apply to cryptocurrency.
+    jqdatasdk uses complex query objects (query(valuation).filter(...)),
+    but for crypto we simplify this to return basic trading pair information
+    or empty DataFrame with warning.
+    
+    Args:
+        valuation: Query object (simplified for crypto - can accept None, dict, or basic object)
+                  If dict, should contain 'code' key with trading pair symbol
+        statDate: Stat date, ignored
+        statDateCount: Stat date count, ignored
+    
+    Returns:
+        pandas DataFrame with basic trading pair info (if available) or empty DataFrame
+        Columns depend on what data is available (e.g., symbol, market_cap, volume_24h)
+        Returns empty DataFrame with warning if financial data is not applicable
+    
+    Raises:
+        RuntimeError: If data adapter is not registered
+    
+    Example:
+        ```python
+        from engine.python_sdk.wealthdata import get_fundamentals
+        
+        # Simplified usage (jqdatasdk uses complex query objects)
+        df = get_fundamentals({'code': 'BTCUSDT'})
+        # Returns basic info or empty DataFrame with warning
+        ```
+    """
+    # Get data adapter
+    adapter = get_data_adapter()
+    
+    if statDate is not None:
+        warnings.warn(
+            f"statDate parameter ({statDate}) is ignored for cryptocurrency fundamentals.",
+            UserWarning
+        )
+    
+    if statDateCount is not None:
+        warnings.warn(
+            f"statDateCount parameter ({statDateCount}) is ignored for cryptocurrency fundamentals.",
+            UserWarning
+        )
+    
+    # Extract symbol from valuation if possible
+    symbol = None
+    if valuation is None:
+        pass
+    elif isinstance(valuation, dict):
+        symbol = valuation.get('code')
+    elif hasattr(valuation, 'code'):
+        symbol = getattr(valuation, 'code', None)
+    elif hasattr(valuation, '__iter__') and not isinstance(valuation, str):
+        # Try to extract from iterable
+        try:
+            for item in valuation:
+                if hasattr(item, 'code'):
+                    symbol = getattr(item, 'code')
+                    break
+                elif isinstance(item, dict):
+                    symbol = item.get('code')
+                    break
+        except (TypeError, AttributeError):
+            pass
+    
+    # Warn that financial data doesn't fully apply
+    warnings.warn(
+        "Financial data concept doesn't fully apply to cryptocurrency. "
+        "This function returns limited data or empty DataFrame. "
+        "For crypto, consider using market data APIs instead.",
+        UserWarning
+    )
+    
+    # If we have a symbol, try to return basic info from adapter
+    if symbol:
+        # Check if symbol exists in market_data_context
+        market_data_context = adapter.get_market_data_context()
+        for market_context in market_data_context:
+            if market_context.get("symbol") == symbol:
+                # Return basic info DataFrame
+                bars = market_context.get("bars", [])
+                if bars:
+                    latest_bar = bars[-1]
+                    # Handle both dict and object formats
+                    if isinstance(latest_bar, dict):
+                        close_val = float(latest_bar.get("close", 0))
+                        volume_val = float(latest_bar.get("volume", 0))
+                    else:
+                        close_val = float(getattr(latest_bar, 'close', 0))
+                        volume_val = float(getattr(latest_bar, 'volume', 0))
+                    
+                    return pd.DataFrame([{
+                        'code': symbol,
+                        'close': close_val,
+                        'volume': volume_val,
+                        # Note: market_cap and other financial metrics not available
+                    }])
+    
+    # Return empty DataFrame if no data available
+    return pd.DataFrame(columns=['code', 'close', 'volume'])
+
+
+def get_industry(
+    security: str,
+    date: Optional[str] = None
+) -> str:
+    """
+    Get industry (category) for a security (trading pair), compatible with jqdatasdk.get_industry().
+    
+    This function returns the category/industry classification for a cryptocurrency trading pair.
+    
+    Args:
+        security: Trading pair symbol (e.g., 'BTCUSDT')
+        date: Date string, ignored (returns current category)
+    
+    Returns:
+        Industry/category string (e.g., 'Layer1', 'DeFi', 'Layer2', 'Exchange')
+        Returns empty string if category not found
+    
+    Raises:
+        RuntimeError: If data adapter is not registered (for verification)
+        ValueError: If security is empty
+    
+    Example:
+        ```python
+        from engine.python_sdk.wealthdata import get_industry
+        
+        # Get category for BTC
+        category = get_industry('BTCUSDT')
+        print(category)  # 'Layer1'
+        ```
+    """
+    # Verify adapter is registered (for consistency, though not strictly needed for config-based methods)
+    get_data_adapter()
+    
+    if not security:
+        raise ValueError("security parameter is required")
+    
+    if date is not None:
+        warnings.warn(
+            f"date parameter ({date}) is ignored. Returns current category.",
+            UserWarning
+        )
+    
+    # Import industry configuration
+    from engine.wealthdata.industry_config import get_trading_pair_category
+    
+    category = get_trading_pair_category(security)
+    
+    if not category:
+        warnings.warn(
+            f"Category not found for trading pair '{security}'. Returning empty string.",
+            UserWarning
+        )
+    
+    return category
 

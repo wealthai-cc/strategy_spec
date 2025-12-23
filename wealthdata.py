@@ -12,22 +12,41 @@ This includes:
 - Configuration functions (set_benchmark, set_option, set_order_cost, OrderCost)
 """
 
-# Import all public APIs from engine.wealthdata
+# Import context management and utility functions from engine.wealthdata (strategy framework)
 from engine.wealthdata import (
-    get_price,
-    get_bars,
-    get_all_securities,
-    get_trade_days,
-    get_index_stocks,
-    get_index_weights,
-    get_fundamentals,
-    get_industry,
-    get_trades,
     set_context,
     get_context,
     clear_context,
     bars_to_dataframe,
 )
+
+# Import data access methods from SDK (new location)
+# Fallback to engine.wealthdata for backward compatibility during migration
+try:
+    from engine.python_sdk.wealthdata import (
+        get_price,
+        get_bars,
+        get_all_securities,
+        get_trade_days,
+        get_index_stocks,
+        get_index_weights,
+        get_fundamentals,
+        get_industry,
+        get_trades,
+    )
+except ImportError:
+    # Fallback to old location during migration
+    from engine.wealthdata import (
+        get_price,
+        get_bars,
+        get_all_securities,
+        get_trade_days,
+        get_index_stocks,
+        get_index_weights,
+        get_fundamentals,
+        get_industry,
+        get_trades,
+    )
 
 # Import compatibility modules
 from types import SimpleNamespace
