@@ -69,3 +69,4 @@ response = engine.execute(exec_request)
 - `ModuleNotFoundError: No module named 'wealthdata'`（如果路径不对）
 - `RuntimeError: Data adapter not registered`（即使路径对了）
 
+

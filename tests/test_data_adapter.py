@@ -164,3 +164,4 @@ class TestDataAdapter:
         # Clean up
         clear_data_adapter()
 
+

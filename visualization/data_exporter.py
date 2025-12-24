@@ -52,7 +52,7 @@ def export_to_json(collector: VisualizationDataCollector, output_path: str) -> s
 
 def _build_metadata(collector: VisualizationDataCollector) -> Dict[str, Any]:
     """构建元数据"""
-    return {
+    metadata = {
         "strategy_name": collector.strategy_name or "unknown",
         "symbol": collector.symbol or "unknown",
         "market_type": collector.market_type or "unknown",
@@ -60,6 +60,18 @@ def _build_metadata(collector: VisualizationDataCollector) -> Dict[str, Any]:
         "test_end_time": collector.test_end_time.isoformat() if collector.test_end_time else None,
         "timeframe": _detect_timeframe(collector.bars),
     }
+    
+    # 添加数据源信息（如果存在）
+    if hasattr(collector, 'custom_metadata') and isinstance(collector.custom_metadata, dict):
+        if 'data_source' in collector.custom_metadata:
+            metadata['data_source'] = collector.custom_metadata['data_source']
+    
+    # 添加数据源信息（如果存在）
+    if hasattr(collector, 'custom_metadata') and isinstance(collector.custom_metadata, dict):
+        if 'data_source' in collector.custom_metadata:
+            metadata['data_source'] = collector.custom_metadata['data_source']
+    
+    return metadata
 
 
 def _detect_timeframe(bars: list) -> str:

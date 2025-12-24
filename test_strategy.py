@@ -15,6 +15,8 @@
 import sys
 import re
 import random
+import json
+import time
 from pathlib import Path
 try:
     import pytest
@@ -28,7 +30,8 @@ from engine.engine import StrategyExecutionEngine
 from engine.context.context import Account
 from datetime import datetime, timedelta
 from engine.compat.market_type import detect_market_type, MarketType
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+import time
 
 
 def _parse_timeframe_interval(timeframe: str) -> Dict[str, int]:
@@ -166,7 +169,104 @@ def _generate_decision_reason(
     return None
 
 
-def test_strategy(strategy_path: str, output_path: Optional[str] = None, auto_preview: bool = True, auto_start_react: bool = True, react_port: int = 5173):
+def _setup_websocket_for_testing(symbols: List[str], resolutions: List[str], wait_seconds: int = 10) -> bool:
+    """
+    为测试设置并启动 WebSocket 连接，等待接收数据。
+    
+    Args:
+        symbols: 交易对列表
+        resolutions: 时间周期列表
+        wait_seconds: 等待接收数据的秒数
+    
+    Returns:
+        是否成功启动并接收到数据
+    """
+    print("=" * 60)
+    print("WebSocket 行情数据设置")
+    print("=" * 60)
+    
+    try:
+        from engine.python_sdk.websocket_manager import get_websocket_manager
+        from engine.python_sdk.websocket_cache import get_websocket_cache
+    except ImportError as e:
+        print(f"❌ WebSocket 功能不可用: {e}")
+        print("   请确保已安装 websocket-client: pip install websocket-client>=1.6.0")
+        return False
+    
+    manager = get_websocket_manager()
+    cache = get_websocket_cache()
+    
+    # 配置 WebSocket
+    print(f"\n配置 WebSocket 订阅:")
+    print(f"  交易对: {symbols}")
+    print(f"  周期: {resolutions}")
+    
+    # 从环境变量读取配置（如果存在）
+    import os
+    endpoint = os.getenv('WEBSOCKET_ENDPOINT', 'wss://ws.wealthai.cc:18000/market_data')
+    csrf_token = os.getenv('WEBSOCKET_CSRF_TOKEN', '')
+    market_type = os.getenv('WEBSOCKET_MARKET_TYPE', 'binance-testnet')
+    
+    manager.configure(
+        endpoint=endpoint,
+        csrf_token=csrf_token if csrf_token else None,
+        market_type=market_type,
+        symbols=symbols,
+        resolutions=resolutions,
+    )
+    
+    # 启动 WebSocket
+    print(f"\n启动 WebSocket 连接...")
+    print(f"  端点: {endpoint}")
+    try:
+        manager.start()
+        print("✅ WebSocket 连接已启动")
+    except Exception as e:
+        print(f"❌ WebSocket 启动失败: {e}")
+        print("   策略将使用模拟数据（回测模式）")
+        return False
+    
+    # 等待接收数据
+    print(f"\n等待接收行情数据（最多 {wait_seconds} 秒）...")
+    start_time = time.time()
+    received_data = False
+    
+    while time.time() - start_time < wait_seconds:
+        # 检查缓存中是否有数据
+        cached_symbols = cache.get_cached_symbols()
+        if cached_symbols:
+            received_data = True
+            print(f"✅ 已接收到数据: {cached_symbols}")
+            
+            # 显示每个交易对的数据量
+            for symbol in symbols:
+                for resolution in resolutions:
+                    bars = cache.get_bars(symbol, resolution)
+                    if bars:
+                        print(f"   {symbol} {resolution}: {len(bars)} 根 K 线")
+            break
+        
+        # 检查连接状态
+        status = manager.get_status()
+        if status['state'] != 'connected':
+            print(f"⚠️  WebSocket 状态: {status['state']}")
+            if status.get('last_error'):
+                print(f"   错误: {status['last_error']}")
+        
+        time.sleep(1)
+        print(".", end="", flush=True)
+    
+    print()  # 换行
+    
+    if not received_data:
+        print(f"⚠️  在 {wait_seconds} 秒内未接收到数据")
+        print("   策略将使用模拟数据（回测模式）")
+        return False
+    
+    return True
+
+
+def test_strategy(strategy_path: str, output_path: Optional[str] = None, auto_preview: bool = True, auto_start_react: bool = True, react_port: int = 5173, use_realtime: bool = False, wait_seconds: int = 10):
     """
     测试策略文件
     
@@ -176,6 +276,8 @@ def test_strategy(strategy_path: str, output_path: Optional[str] = None, auto_pr
         auto_preview: 是否自动预览（默认 True）
         auto_start_react: 是否自动启动 React 服务器（默认 True）
         react_port: React 服务器端口（默认 5173）
+        use_realtime: 是否使用真实 WebSocket 行情数据（默认 False）
+        wait_seconds: 等待 WebSocket 数据的秒数（默认 10 秒）
     """
     print(f"正在测试策略: {strategy_path}")
     print("=" * 60)
@@ -241,6 +343,30 @@ def test_strategy(strategy_path: str, output_path: Optional[str] = None, auto_pr
         
         # 检测市场类型
         market_type = detect_market_type(default_symbol)
+        
+        # 如果启用真实数据，启动 WebSocket 连接
+        websocket_ready = False
+        data_source_info = "模拟数据"
+        if use_realtime:
+            websocket_ready = _setup_websocket_for_testing([default_symbol], [default_timeframe], wait_seconds)
+            if websocket_ready:
+                print(f"\n✅ 已启用真实行情数据模式")
+                data_source_info = "真实 WebSocket 数据"
+                # 显示缓存中的数据量
+                try:
+                    from engine.python_sdk.websocket_cache import get_websocket_cache
+                    cache = get_websocket_cache()
+                    bars = cache.get_bars(default_symbol, default_timeframe)
+                    if bars:
+                        print(f"   📊 WebSocket 缓存: {len(bars)} 根 {default_timeframe} K 线")
+                except:
+                    pass
+            else:
+                print(f"\n⚠️  真实行情数据不可用，将使用模拟数据")
+                data_source_info = "模拟数据（WebSocket 连接失败）"
+        else:
+            print(f"\n📊 使用模拟数据进行测试")
+            print(f"   提示：使用 --realtime 参数可启用真实 WebSocket 行情数据")
         
         # 启动数据收集
         strategy_name = Path(strategy_path).stem
@@ -959,6 +1085,13 @@ def test_strategy(strategy_path: str, output_path: Optional[str] = None, auto_pr
         # 结束数据收集
         collector.end_test()
         
+        # 记录数据源信息到收集器（用于报告显示）
+        if 'data_source_info' in locals():
+            # 将数据源信息添加到收集器的元数据中
+            if not hasattr(collector, 'custom_metadata'):
+                collector.custom_metadata = {}
+            collector.custom_metadata['data_source'] = data_source_info
+        
         strategy_name = Path(strategy_path).stem
         
         # 优先生成 JSON 数据文件（供 React 模板使用）
@@ -968,6 +1101,10 @@ def test_strategy(strategy_path: str, output_path: Optional[str] = None, auto_pr
         try:
             json_path = collector.export_to_json(json_output_path)
             print(f"\n📄 JSON 数据已导出: {json_path}")
+            
+            # 显示数据源信息
+            if 'data_source_info' in locals():
+                print(f"   📊 数据来源: {data_source_info}")
             
             # 自动预览功能
             if auto_preview:
@@ -992,11 +1129,96 @@ def test_strategy(strategy_path: str, output_path: Optional[str] = None, auto_pr
                     
                     if auto_start_react:
                         print(f"\n🔍 检查 React 服务器状态...")
+                        
+                        # #region agent log
+                        try:
+                            import time as time_module
+                            log_path = Path("/Users/spencerjin/Documents/wealthai_strategy_spec/.cursor/debug.log")
+                            log_path.parent.mkdir(exist_ok=True)
+                            log_data = {
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "A",
+                                "location": "test_strategy.py:test_strategy",
+                                "message": "准备启动 ReactLauncher",
+                                "data": {
+                                    "auto_start_react": auto_start_react,
+                                    "react_port": react_port,
+                                    "auto_preview": auto_preview
+                                },
+                                "timestamp": int(time_module.time() * 1000)
+                            }
+                            with open(log_path, "a") as f:
+                                f.write(json.dumps(log_data) + "\n")
+                        except Exception as e:
+                            print(f"DEBUG: 日志写入失败: {e}")
+                        # #endregion
+                        
                         react_launcher = ReactLauncher(port=react_port)
-                        if not react_launcher.start():
+                        
+                        # #region agent log
+                        try:
+                            import time as time_module
+                            log_path = Path("/Users/spencerjin/Documents/wealthai_strategy_spec/.cursor/debug.log")
+                            log_path.parent.mkdir(exist_ok=True)
+                            log_data = {
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "A",
+                                "location": "test_strategy.py:test_strategy",
+                                "message": "ReactLauncher 创建后",
+                                "data": {
+                                    "port": react_launcher.port,
+                                    "base_url": react_launcher.base_url,
+                                    "is_running_before": react_launcher.is_running()
+                                },
+                                "timestamp": int(time_module.time() * 1000)
+                            }
+                            with open(log_path, "a") as f:
+                                f.write(json.dumps(log_data) + "\n")
+                        except Exception as e:
+                            print(f"DEBUG: 日志写入失败: {e}")
+                        # #endregion
+                        
+                        start_result = react_launcher.start()
+                        
+                        # #region agent log
+                        try:
+                            import time as time_module
+                            log_path = Path("/Users/spencerjin/Documents/wealthai_strategy_spec/.cursor/debug.log")
+                            log_path.parent.mkdir(exist_ok=True)
+                            log_data = {
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "A",
+                                "location": "test_strategy.py:test_strategy",
+                                "message": "react_launcher.start() 返回",
+                                "data": {
+                                    "start_result": start_result,
+                                    "process_pid": react_launcher.process.pid if react_launcher.process else None,
+                                    "process_poll": react_launcher.process.poll() if react_launcher.process else None,
+                                    "is_running_after": react_launcher.is_running()
+                                },
+                                "timestamp": int(time_module.time() * 1000)
+                            }
+                            with open(log_path, "a") as f:
+                                f.write(json.dumps(log_data) + "\n")
+                        except Exception as e:
+                            print(f"DEBUG: 日志写入失败: {e}")
+                        # #endregion
+                        
+                        if not start_result:
                             print(f"   ⚠️  React 服务器启动失败，将尝试使用已运行的服务器")
                             print(f"   如果预览失败，请手动启动:")
                             print(f"      cd visualization/react-template && npm run dev")
+                        else:
+                            # 服务器启动成功，保存引用到函数作用域外，避免被垃圾回收
+                            # 注意：使用 start_new_session=True 确保进程独立运行
+                            print(f"   ✅ React 服务器已启动（独立进程，脚本退出后继续运行）")
+                            # 将 launcher 保存为函数属性，确保不会被垃圾回收
+                            if not hasattr(test_strategy, '_react_launchers'):
+                                test_strategy._react_launchers = []
+                            test_strategy._react_launchers.append(react_launcher)
                     else:
                         # 不自动启动，只检测是否运行
                         launcher = ReactLauncher(port=react_port)
@@ -1005,14 +1227,84 @@ def test_strategy(strategy_path: str, output_path: Optional[str] = None, auto_pr
                             print(f"   请手动启动:")
                             print(f"      cd visualization/react-template && npm run dev")
                     
-                    # 打开浏览器（直接打开 React 应用，它会自动加载 latest_report.json）
+                    # 确保 React 服务器已就绪后再打开浏览器
                     print(f"\n🚀 正在打开预览...")
                     print(f"   React 服务器: {react_template_url}")
                     print(f"   数据文件: public/latest_report.json")
                     
-                    webbrowser.open(react_template_url)
-                    print(f"   ✅ 预览已打开")
-                    print(f"   🌐 React 服务器: {react_template_url}")
+                    # 等待服务器就绪（如果启动了服务器，最多等待 60 秒）
+                    import time
+                    server_ready = False
+                    
+                    if react_launcher and react_launcher.process:
+                        # 如果启动了服务器，等待就绪（最多等待 60 秒，与启动器超时时间一致）
+                        print(f"   等待服务器就绪（最多 60 秒）...")
+                        max_wait = 60
+                        waited = 0
+                        check_interval = 2.0
+                        
+                        while waited < max_wait:
+                            if react_launcher.is_running():
+                                server_ready = True
+                                print(f"   ✅ 服务器已就绪")
+                                break
+                            
+                            # 检查进程是否退出
+                            if react_launcher.process:
+                                poll_result = react_launcher.process.poll()
+                                if poll_result is not None:
+                                    print(f"   ❌ 服务器进程已退出（退出码: {poll_result}）")
+                                    # 尝试读取错误信息
+                                    try:
+                                        if react_launcher.process.stderr:
+                                            stderr_output = react_launcher.process.stderr.read().decode('utf-8', errors='ignore')
+                                            if stderr_output:
+                                                print(f"   错误信息:")
+                                                error_lines = stderr_output.strip().split('\n')[-5:]
+                                                for line in error_lines:
+                                                    if line.strip():
+                                                        print(f"      {line}")
+                                    except:
+                                        pass
+                                    break
+                            
+                            time.sleep(check_interval)
+                            waited += check_interval
+                            
+                            # 每 10 秒显示一次进度
+                            if int(waited) % 10 == 0:
+                                process_status = "运行中"
+                                if react_launcher.process:
+                                    poll_result = react_launcher.process.poll()
+                                    if poll_result is not None:
+                                        process_status = f"已退出({poll_result})"
+                                print(f"   ⏳ 等待中... ({int(waited)}s/{max_wait}s) [进程:{process_status}]")
+                        
+                        if not server_ready:
+                            print(f"   ⚠️  等待超时，服务器可能未正常启动")
+                            print(f"   💡 建议手动启动服务器查看详细错误:")
+                            print(f"      cd visualization/react-template && npm run dev")
+                    else:
+                        # 检查是否已有服务器运行
+                        launcher = ReactLauncher(port=react_port)
+                        server_ready = launcher.is_running()
+                        if server_ready:
+                            print(f"   ✅ 检测到已有服务器运行")
+                    
+                    if server_ready:
+                        webbrowser.open(react_template_url)
+                        print(f"   ✅ 预览已打开")
+                        print(f"   🌐 React 服务器: {react_template_url}")
+                    else:
+                        print(f"   ⚠️  React 服务器未就绪")
+                        print(f"   💡 请手动启动服务器:")
+                        print(f"      cd visualization/react-template && npm run dev")
+                        print(f"   然后访问: {react_template_url}")
+                    
+                    # 提示：服务器会继续运行
+                    if react_launcher and react_launcher.process:
+                        print(f"\n💡 提示：React 服务器在后台运行，脚本退出后仍可访问")
+                        print(f"   如需停止服务器，请手动终止进程或使用 Ctrl+C（可能需要两次）")
                 except Exception as e:
                     print(f"\n⚠️  自动预览失败: {e}")
                     print(f"   可以手动查看 JSON 文件: {json_path}")
@@ -1037,6 +1329,13 @@ def test_strategy(strategy_path: str, output_path: Optional[str] = None, auto_pr
                     print(f"  ⚠️  {warning}")
         
         print("\n" + "=" * 60)
+        
+        # 提示：如果启动了 React 服务器，它会继续运行
+        if auto_preview and auto_start_react:
+            print(f"\n💡 React 服务器继续在后台运行")
+            print(f"   访问地址: http://localhost:{react_port}")
+            print(f"   如需停止，请手动终止进程")
+        
         # 对于使用 BacktestEngine 的情况，直接返回成功
         if uses_run_daily:
             return True
@@ -1073,6 +1372,10 @@ if __name__ == "__main__":
                         help='禁用自动启动 React 服务器')
     parser.add_argument('--react-port', type=int, default=5173,
                         help='React 服务器端口（默认 5173）')
+    parser.add_argument('--realtime', '-r', action='store_true',
+                        help='使用真实 WebSocket 行情数据（默认使用模拟数据）')
+    parser.add_argument('--wait-seconds', '-w', type=int, default=10,
+                        help='等待 WebSocket 数据的秒数（默认 10 秒，仅在 --realtime 模式下有效）')
     
     args = parser.parse_args()
     
@@ -1081,6 +1384,8 @@ if __name__ == "__main__":
         output_path=args.output, 
         auto_preview=not args.no_preview,
         auto_start_react=not args.no_auto_start_react,
-        react_port=args.react_port
+        react_port=args.react_port,
+        use_realtime=args.realtime,
+        wait_seconds=args.wait_seconds
     )
     sys.exit(0 if success else 1)

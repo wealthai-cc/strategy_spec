@@ -285,7 +285,15 @@ export function KLineChartECharts({
                   <div>成交量: ${data[4].toLocaleString()}</div>
                 `;
               } else {
-                result += `<div>${param.seriesName}: ${param.value?.toFixed(2) || 'N/A'}</div>`;
+                // 处理散点图数据（买入/卖出信号），value 是数组 [index, price]
+                const value = param.value;
+                let displayValue = 'N/A';
+                if (typeof value === 'number') {
+                  displayValue = value.toFixed(2);
+                } else if (Array.isArray(value) && value.length >= 2 && typeof value[1] === 'number') {
+                  displayValue = value[1].toFixed(2);
+                }
+                result += `<div>${param.seriesName}: ${displayValue}</div>`;
               }
             });
             return result;

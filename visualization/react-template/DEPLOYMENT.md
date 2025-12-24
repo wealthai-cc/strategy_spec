@@ -232,3 +232,5 @@ error_log /var/log/nginx/strategy-visualization.error.log;
 4. 验证功能正常
 5. 如有问题，回滚到备份版本
 
+
+

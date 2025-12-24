@@ -20,6 +20,6 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    open: true,
+    open: false, // 由 test_strategy.py 控制浏览器打开，避免重复打开
   },
 })

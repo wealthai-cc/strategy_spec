@@ -172,3 +172,4 @@ def get_data_adapter() -> DataAdapter:
 3. **bars_to_dataframe 的位置**：是否应该迁移到 SDK，因为它是数据转换工具？
    - 建议：保留在策略框架，因为它是框架内部使用的工具方法
 
+

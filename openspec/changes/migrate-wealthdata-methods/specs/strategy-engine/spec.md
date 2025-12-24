@@ -64,3 +64,4 @@
 - **THEN** 框架 SHALL 返回空的 DataFrame，包含正确的列结构
 - **AND** DataFrame SHALL 包含 open, high, low, close, volume 列
 
+

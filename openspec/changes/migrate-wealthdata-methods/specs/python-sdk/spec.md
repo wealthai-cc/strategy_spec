@@ -87,3 +87,4 @@ Python SDK SHALL 定义数据适配器接口，允许不同实现层提供数据
 - **AND** 适配器 SHALL 从 ExecRequest 的 market_data_context 获取数据
 - **AND** 适配器 SHALL 在策略执行完成后自动清理
 
+
