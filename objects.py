@@ -33,6 +33,7 @@ class OrderStatusType(Enum):
     REJECTED_ORDER_STATUS_TYPE = 6
     EXPIRED_ORDER_STATUS_TYPE = 7
 
+
 @dataclass
 class Bar:
     symbol: str
@@ -94,13 +95,23 @@ class OrderOp:
     order_id: str = "" # For cancel/modify
     params: Dict = None # Extra params
 
+@dataclass
+class Position:
+    symbol: str
+    total_volume: float = 0.0
+    frozen_volume: float = 0.0
+    available_volume: float = 0.0
+    average_price: float = 0.0
+
 class SubPortfolio(object):
     pass
 
 class Portfolio(object):
     def __init__(self):
-        self.cash = 0.0
-        self.positions = {} # Dict[symbol, Position]
+        self.total_cash = 0.0
+        self.frozen_cash = 0.0
+        self.available_cash = 0.0
+        self.positions: Dict[str, Position] = {}
         self.total_value = 0.0
         self.positions_value = 0.0
 
