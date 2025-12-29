@@ -131,9 +131,14 @@ class Context(object):
         self.trade_provider = None
 
     def add_order_op(self, op: OrderOp):
+        """
+        Record an order operation for history/archival purposes.
+        Do NOT use this for order execution queue.
+        """
         self._order_ops.append(op)
 
-    def get_order_ops(self) -> List[OrderOp]:
-        ops = self._order_ops[:]
-        self._order_ops.clear()
-        return ops
+    def get_order_ops_history(self) -> List[OrderOp]:
+        """
+        Return the history of order operations.
+        """
+        return self._order_ops[:]
