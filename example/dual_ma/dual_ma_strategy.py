@@ -1,7 +1,7 @@
 from typing import List, Optional
 import pandas as pd
 from strategy_spec.strategy import Strategy
-from strategy_spec.objects import Context, Order, OrderStatusType, OrderType
+from strategy_spec.objects import Context, Order, OrderStatusType, OrderType, Bar, Tick, OrderOp
 
 class DualMAStrategy(Strategy):
     """
@@ -29,10 +29,20 @@ class DualMAStrategy(Strategy):
     def on_start(self, context: Context):
         print("DualMAStrategy Started")
 
-    def on_timer(self, context: Context):
+    def on_stop(self, context: Context):
+        print("DualMAStrategy Stopped")
+
+    def on_bar(self, context: Context, bar: Bar) -> List[OrderOp]:
+        return []
+
+    def on_tick(self, context: Context, tick: Tick) -> List[OrderOp]:
+        return []
+
+    def on_timer(self, context: Context) -> List[OrderOp]:
         """
         定时触发逻辑 (例如每分钟触发一次)
         """
+        ops = []
         try:
             # 1. 获取历史K线数据
             # 需要足够的长度来计算长周期均线 (至少 long_window + 1 个点用于判断交叉)
@@ -41,7 +51,7 @@ class DualMAStrategy(Strategy):
             
             if df is None or len(df) < limit:
                 print("Insufficient data")
-                return
+                return []
 
             # 2. 计算均线
             # 假设 df 包含 'close' 列
@@ -69,19 +79,24 @@ class DualMAStrategy(Strategy):
                 # 如果当前没有持仓，则买入
                 if self.current_pos <= 0:
                     print(f"Action: Buying {self.quantity} {self.symbol}")
-                    self.buy(context, self.symbol, float(curr['close']), self.quantity, OrderType.MARKET_ORDER_TYPE)
+                    op = self.buy(context, self.symbol, float(curr['close']), self.quantity, OrderType.MARKET_ORDER_TYPE)
+                    ops.append(op)
             
             elif death_cross:
                 print(f"Signal: Death Cross detected at {curr['close']}")
                 # 如果当前持有仓位，则卖出
                 if self.current_pos >= 0:
                     print(f"Action: Selling {self.quantity} {self.symbol}")
-                    self.sell(context, self.symbol, float(curr['close']), self.quantity, OrderType.MARKET_ORDER_TYPE)
+                    op = self.sell(context, self.symbol, float(curr['close']), self.quantity, OrderType.MARKET_ORDER_TYPE)
+                    ops.append(op)
+            
+            return ops
 
         except Exception as e:
             print(f"Error in on_timer: {e}")
+            return []
 
-    def on_order_status(self, context: Context, order: Order):
+    def on_order_status(self, context: Context, order: Order) -> List[OrderOp]:
         """
         订单状态更新回调
         """
@@ -96,3 +111,5 @@ class DualMAStrategy(Strategy):
                 self.current_pos -= filled_qty
             
             print(f"Current Position: {self.current_pos}")
+        
+        return []

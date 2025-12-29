@@ -25,6 +25,7 @@ class Strategy(ABC):
         # 类型为 DataSDKBase (实际上是 SDKProxy)
         self.sdk: Optional['DataSDKBase'] = None
 
+    @abstractmethod
     def on_init(self, context: Context):
         """
         策略初始化时调用。
@@ -32,12 +33,14 @@ class Strategy(ABC):
         """
         pass
 
+    @abstractmethod
     def on_start(self, context: Context):
         """
         策略开始执行时调用。
         """
         pass
 
+    @abstractmethod
     def on_stop(self, context: Context):
         """
         策略停止时调用。
@@ -46,34 +49,38 @@ class Strategy(ABC):
 
     # --- 事件处理函数 ---
     # 策略应该重写这些方法来实现交易逻辑。
-    # 它们可以返回 OrderOp 列表，或者使用 context.add_order_op()
+    # 它们可以返回 OrderOp 列表
 
+    @abstractmethod
     def on_bar(self, context: Context, bar: Bar) -> List[OrderOp]:
         """
         当新的 Bar (K线) 到达时调用。
         """
-        return []
+        pass
 
+    @abstractmethod
     def on_tick(self, context: Context, tick: Tick) -> List[OrderOp]:
         """
         当新的 Tick 到达时调用。
         """
-        return []
+        pass
 
+    @abstractmethod
     def on_order_status(self, context: Context, order: Order) -> List[OrderOp]:
         """
         当订单状态发生变化时调用。
         """
-        return []
+        pass
 
+    @abstractmethod
     def on_timer(self, context: Context) -> List[OrderOp]:
         """
         如果启用了定时器，则周期性调用。
         """
-        return []
+        pass
 
     # --- 辅助方法 ---
-    # 这些辅助方法生成 OrderOps 并返回，同时也会添加到 context 中。
+    # 这些辅助方法生成 OrderOps 并返回。
 
     def buy(self, context: Context, symbol: str, price: float, volume: float, order_type: OrderType = OrderType.LIMIT_ORDER_TYPE) -> OrderOp:
         """
@@ -100,5 +107,4 @@ class Strategy(ABC):
             time_in_force=TimeInForceType.GTC_TIF_TYPE # 默认 GTC
         )
         op = OrderOp(op_type=OrderOpType.CREATE, order=order)
-        context.add_order_op(op)
         return op
