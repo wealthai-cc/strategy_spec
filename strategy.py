@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 from typing import List, Optional, TYPE_CHECKING
 import datetime
@@ -24,6 +25,18 @@ class Strategy(ABC):
         # SDK 实例，由 Engine 注入
         # 类型为 DataSDKBase (实际上是 SDKProxy)
         self.sdk: Optional['DataSDKBase'] = None
+        
+        # 初始化日志
+        self.log_level = "INFO"
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.setLevel(self.log_level)
+
+    def set_log_level(self, level: str):
+        """
+        设置日志级别
+        """
+        self.log_level = level.upper()
+        self.logger.setLevel(self.log_level)
 
     @abstractmethod
     def on_init(self, context: Context):
