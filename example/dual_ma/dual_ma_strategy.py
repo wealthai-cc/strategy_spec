@@ -1,4 +1,5 @@
 from typing import List, Optional
+import logging
 import pandas as pd
 from strategy_spec.strategy import Strategy
 from strategy_spec.objects import Context, Order, OrderStatusType, OrderType, Bar, Tick, OrderOp
@@ -13,6 +14,24 @@ class DualMAStrategy(Strategy):
     """
 
     def on_init(self, context: Context):
+        # 配置 Logger 格式
+        # 格式: 时间戳 - 日志等级 - 代码路径:行号 - 方法名 - 消息
+        fmt = '%(asctime)s - %(levelname)s - %(pathname)s:%(lineno)d - %(funcName)s - %(message)s'
+        formatter = logging.Formatter(fmt)
+        
+        # 检查是否已有 Handler，避免重复添加
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
+        else:
+            # 如果已有 Handler，更新其格式
+            for handler in self.logger.handlers:
+                handler.setFormatter(formatter)
+                
+        # 禁止传播，防止父级 Logger 重复输出
+        self.logger.propagate = False
+
         self.symbol = "BTC/USDT"
         self.quantity = 0.01
         
@@ -23,34 +42,34 @@ class DualMAStrategy(Strategy):
         # 策略状态
         self.current_pos = 0.0 # 当前持仓数量
         
-        print(f"DualMAStrategy Initialized: {self.symbol}, Qty={self.quantity}, "
+        self.logger.info(f"DualMAStrategy Initialized: {self.symbol}, Qty={self.quantity}, "
               f"Windows={self.short_window}/{self.long_window}")
 
     def on_start(self, context: Context):
-        print("DualMAStrategy Started")
+        self.logger.info("DualMAStrategy Started")
+        
+        # 从 Context 更新参数 (如果在 ExecRequest 中指定了参数，这里会生效)
+        self.short_window = int(context.strategy_params.get("short_window", self.short_window))
+        self.long_window = int(context.strategy_params.get("long_window", self.long_window))
+        
+        self.logger.info(f"DualMAStrategy Params Updated: Windows={self.short_window}/{self.long_window}")
 
     def on_stop(self, context: Context):
-        print("DualMAStrategy Stopped")
+        self.logger.info("DualMAStrategy Stopped")
 
     def on_bar(self, context: Context, bar: Bar) -> List[OrderOp]:
-        return []
-
-    def on_tick(self, context: Context, tick: Tick) -> List[OrderOp]:
-        return []
-
-    def on_timer(self, context: Context) -> List[OrderOp]:
         """
-        定时触发逻辑 (例如每分钟触发一次)
+        当新的 Bar (K线) 到达时调用。
         """
         ops = []
         try:
             # 1. 获取历史K线数据
             # 需要足够的长度来计算长周期均线 (至少 long_window + 1 个点用于判断交叉)
             limit = self.long_window + 5
-            df = self.sdk.get_history_kline(self.symbol, limit=limit)
+            df = self.sdk.get_history_kline(self.symbol, max_count=limit)
             
             if df is None or len(df) < limit:
-                print("Insufficient data")
+                self.logger.info(f"Insufficient data，required {limit} bars, got {len(df)} bars")   
                 return []
 
             # 2. 计算均线
@@ -75,32 +94,41 @@ class DualMAStrategy(Strategy):
             # 实际策略中可能需要检查当前持仓 (self.current_pos) 避免重复开仓
             
             if golden_cross:
-                print(f"Signal: Golden Cross detected at {curr['close']}")
+                self.logger.info(f"Signal: Golden Cross detected at {curr['close']}")
                 # 如果当前没有持仓，则买入
                 if self.current_pos <= 0:
-                    print(f"Action: Buying {self.quantity} {self.symbol}")
+                    self.logger.info(f"Action: Buying {self.quantity} {self.symbol}")
                     op = self.buy(context, self.symbol, float(curr['close']), self.quantity, OrderType.MARKET_ORDER_TYPE)
                     ops.append(op)
             
             elif death_cross:
-                print(f"Signal: Death Cross detected at {curr['close']}")
+                self.logger.info(f"Signal: Death Cross detected at {curr['close']}")
                 # 如果当前持有仓位，则卖出
                 if self.current_pos >= 0:
-                    print(f"Action: Selling {self.quantity} {self.symbol}")
+                    self.logger.info(f"Action: Selling {self.quantity} {self.symbol}")
                     op = self.sell(context, self.symbol, float(curr['close']), self.quantity, OrderType.MARKET_ORDER_TYPE)
                     ops.append(op)
             
             return ops
 
         except Exception as e:
-            print(f"Error in on_timer: {e}")
+            self.logger.error(f"Error in on_bar: {e}", exc_info=True)
             return []
+
+    def on_tick(self, context: Context, tick: Tick) -> List[OrderOp]:
+        return []
+
+    def on_timer(self, context: Context) -> List[OrderOp]:
+        """
+        定时触发逻辑 (例如每分钟触发一次)
+        """
+        return []
 
     def on_order_status(self, context: Context, order: Order) -> List[OrderOp]:
         """
         订单状态更新回调
         """
-        print(f"Order Update: ID={order.order_id}, Status={order.status}, Filled={order.executed_size}")
+        self.logger.info(f"Order Update: ID={order.order_id}, Status={order.status}, Filled={order.executed_size}")
         
         # 简单维护持仓状态
         if order.status == OrderStatusType.FILLED_ORDER_STATUS_TYPE:
@@ -110,6 +138,6 @@ class DualMAStrategy(Strategy):
             elif order.direction_type.name == 'SELL_DIRECTION_TYPE':
                 self.current_pos -= filled_qty
             
-            print(f"Current Position: {self.current_pos}")
+            self.logger.info(f"Current Position: {self.current_pos}")
         
         return []

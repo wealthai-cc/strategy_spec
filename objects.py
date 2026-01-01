@@ -124,7 +124,6 @@ class Context(object):
         self.subportfolios: List[SubPortfolio] = []
         self.current_dt: Optional[datetime.datetime] = None
         self.universe: List[str] = []
-        self.run_params: Dict = {}
         self.strategy_params: Dict = {}
         self._order_ops: List[OrderOp] = []
         self.data_provider = None 
