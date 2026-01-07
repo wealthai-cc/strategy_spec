@@ -61,12 +61,20 @@ class DualMAStrategy(Strategy):
         """
         当新的 Bar (K线) 到达时调用。
         """
+        self.logger.debug(f"current bar: {bar}")
         ops = []
         try:
+            # Use TimeFrame.to_ktype() directly
+            ktype = bar.interval.to_ktype()
+
             # 1. 获取历史K线数据
             # 需要足够的长度来计算长周期均线 (至少 long_window + 1 个点用于判断交叉)
             limit = self.long_window + 5
-            df = self.sdk.get_history_kline(self.symbol, max_count=limit)
+            code, df = self.sdk.get_history_kline(self.symbol, max_count=limit, ktype=ktype)
+            
+            if code != 0:
+                self.logger.error(f"Failed to get history kline, code: {code}")
+                return []
             
             if df is None or len(df) < limit:
                 self.logger.info(f"Insufficient data，required {limit} bars, got {len(df)} bars")   
@@ -92,6 +100,13 @@ class DualMAStrategy(Strategy):
             # 4. 执行交易
             # 这里简单演示: 金叉买入, 死叉卖出
             # 实际策略中可能需要检查当前持仓 (self.current_pos) 避免重复开仓
+            
+            pos = self.context.portfolio.positions.get(self.symbol, None)
+            if pos:
+                self.current_pos = pos.position_size
+            else:
+                self.logger.error(f"Failed to get position for {self.symbol}")
+                return []
             
             if golden_cross:
                 self.logger.info(f"Signal: Golden Cross detected at {curr['close']}")
@@ -129,15 +144,5 @@ class DualMAStrategy(Strategy):
         订单状态更新回调
         """
         self.logger.info(f"Order Update: ID={order.order_id}, Status={order.status}, Filled={order.executed_size}")
-        
-        # 简单维护持仓状态
-        if order.status == OrderStatusType.FILLED_ORDER_STATUS_TYPE:
-            filled_qty = float(order.executed_size)
-            if order.direction_type.name == 'BUY_DIRECTION_TYPE':
-                self.current_pos += filled_qty
-            elif order.direction_type.name == 'SELL_DIRECTION_TYPE':
-                self.current_pos -= filled_qty
-            
-            self.logger.info(f"Current Position: {self.current_pos}")
         
         return []

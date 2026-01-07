@@ -34,6 +34,41 @@ class OrderStatusType(Enum):
     EXPIRED_ORDER_STATUS_TYPE = 7
 
 
+
+class TimeUnit(Enum):
+    MINUTE = 'm'
+    HOUR = 'h'
+    DAY = 'd'
+    WEEK = 'w'
+
+@dataclass
+class TimeFrame:
+    amount: int
+    unit: TimeUnit
+    
+    def __str__(self):
+        return f"{self.amount}{self.unit.value}"
+        
+    def to_ktype(self) -> str:
+        '''
+        Convert to SDK ktype format (e.g., K_1M, K_60M, K_DAY)
+        '''
+        if self.unit == TimeUnit.MINUTE:
+            return f"K_{self.amount}M"
+        elif self.unit == TimeUnit.HOUR:
+            # SDK expects minutes for hourly data (e.g., K_60M for 1h)
+            return f"K_{self.amount * 60}M"
+        elif self.unit == TimeUnit.DAY:
+            if self.amount == 1:
+                return "K_DAY"
+            # Fallback for multi-day? SDK might not support K_3D etc directly as standard keys
+            return "K_DAY" 
+        elif self.unit == TimeUnit.WEEK:
+            if self.amount == 1:
+                return "K_WEEK"
+            return "K_WEEK"
+        return "K_DAY"
+
 @dataclass
 class Bar:
     symbol: str
@@ -44,7 +79,7 @@ class Bar:
     close: float
     volume: float
     amount: float = 0.0
-    interval: str = "1m"
+    interval: TimeFrame = None
 
 @dataclass
 class Tick:
@@ -103,9 +138,6 @@ class Position:
     available_volume: float = 0.0
     average_price: float = 0.0
 
-class SubPortfolio(object):
-    pass
-
 class Portfolio(object):
     def __init__(self):
         self.total_cash = 0.0
@@ -120,14 +152,13 @@ class Context(object):
     Strategy Context Environment
     """
     def __init__(self):
-        self.portfolio: Portfolio = Portfolio()
-        self.subportfolios: List[SubPortfolio] = []
-        self.current_dt: Optional[datetime.datetime] = None
-        self.universe: List[str] = []
-        self.strategy_params: Dict = {}
-        self._order_ops: List[OrderOp] = []
-        self.data_provider = None 
-        self.trade_provider = None
+        self.portfolio: Portfolio = Portfolio()  # 投资组合快照：现金、持仓、总资产等（单账户/单组合语义）
+        self.current_dt: Optional[datetime.datetime] = None  # 当前引擎时间（回测为当前 bar 时间；实盘为事件时间）
+        self.cash: float = 0.0  # 账户现金总量（通常等价于 portfolio.total_cash；用于展示/统计）
+        self.available_cash: float = 0.0  # 可下单现金（通常等价于 portfolio.available_cash；策略风控应优先使用）
+        self.universe: List[str] = []  # 策略关注的标的列表（订阅/回测加载的 symbols）
+        self.strategy_params: Dict = {}  # 策略参数（来自配置或上层 ExecRequest.strategy_param）
+        self._order_ops: List[OrderOp] = []  # 订单操作历史（归档用途；不要当作执行队列）
 
     def add_order_op(self, op: OrderOp):
         """
