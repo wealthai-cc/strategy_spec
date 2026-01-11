@@ -67,6 +67,10 @@ class DualMAStrategy(Strategy):
             # Use TimeFrame.to_ktype() directly
             ktype = bar.interval.to_ktype()
 
+            if ktype == "":
+                self.logger.warning(f"Invalid ktype: {ktype}")
+                return []
+
             # 1. 获取历史K线数据
             # 需要足够的长度来计算长周期均线 (至少 long_window + 1 个点用于判断交叉)
             limit = self.long_window + 5

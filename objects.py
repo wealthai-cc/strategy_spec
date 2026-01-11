@@ -50,24 +50,32 @@ class TimeFrame:
         return f"{self.amount}{self.unit.value}"
         
     def to_ktype(self) -> str:
-        '''
-        Convert to SDK ktype format (e.g., K_1M, K_60M, K_DAY)
-        '''
+        """
+        将 TimeFrame 转换为 get_history_kline 所需的 ktype 字符串。
+
+        返回值示例：K_1M、K_5M、K_60M、K_DAY、K_WEEK。
+        若 unit/amount 组合不被当前 SDK 支持，则返回空字符串。
+        """
+        supported_minute_amounts = {1, 3, 5, 15, 30, 60}
+
         if self.unit == TimeUnit.MINUTE:
-            return f"K_{self.amount}M"
-        elif self.unit == TimeUnit.HOUR:
-            # SDK expects minutes for hourly data (e.g., K_60M for 1h)
-            return f"K_{self.amount * 60}M"
-        elif self.unit == TimeUnit.DAY:
-            if self.amount == 1:
-                return "K_DAY"
-            # Fallback for multi-day? SDK might not support K_3D etc directly as standard keys
-            return "K_DAY" 
-        elif self.unit == TimeUnit.WEEK:
-            if self.amount == 1:
-                return "K_WEEK"
-            return "K_WEEK"
-        return "K_DAY"
+            if self.amount in supported_minute_amounts:
+                return f"K_{self.amount}M"
+            return ""
+
+        if self.unit == TimeUnit.HOUR:
+            minutes = self.amount * 60
+            if minutes in supported_minute_amounts:
+                return f"K_{minutes}M"
+            return ""
+
+        if self.unit == TimeUnit.DAY:
+            return "K_DAY" if self.amount == 1 else ""
+
+        if self.unit == TimeUnit.WEEK:
+            return "K_WEEK" if self.amount == 1 else ""
+
+        return ""
 
 @dataclass
 class Bar:
