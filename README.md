@@ -1,90 +1,115 @@
-# WealthAI 策略规范（Strategy Spec）
+# Strategy Specification (策略规范)
 
-## 概述
-- 本目录定义面向策略实现者的公共接口规范（Proto3），用于在策略与策略管理系统之间进行标准化交互。
-- 设计目标：无状态、可测试、跨语言、可扩展；易于在不同运行环境（回测、仿真、真实交易）复用。
-- 适用范围：量化策略的执行接口、账户/订单/行情数据结构、触发机制与错误反馈。
+本模块定义了量化交易策略开发的标准接口、基类以及相关的数据结构。所有的用户策略都必须基于此规范进行开发。
 
-## 设计原则
-- 无状态策略：策略不保存内部状态，每次 `Exec` 为纯函数式调用，由入参决定行为。
-- 风控内部化：风控逻辑在策略内部闭环，对外仅通过订单事件体现。
-- 时间统一：所有时间字段使用 Unix 毫秒时间戳。
-- 明确触发：支持行情、风控、订单状态三类触发，触发详情通过 `TriggerDetail` 描述。
+## 1. Strategy 基类
 
-## 文件结构
-- `strategy_spec.proto`：服务接口与核心消息（`Exec/Health`、触发类型、执行响应）
-- `account.proto`：账户与持仓结构（含风控指标）
-- `order.proto`：订单结构（类型、状态、价格字段、手续费等）
-- `market_data.proto`：行情结构（Bar 与技术指标）
-- `review.md`：规范评审与改进建议
-- `python_sdk.md`：策略侧 Python SDK 方法手册（TradingRule、佣金费率）
+`strategy_spec.strategy.Strategy` 是所有策略的基类。它定义了策略的生命周期和事件处理接口。
 
-## 服务接口（StrategySpec）
-- `Health(Empty) -> HealthResponse`：返回策略健康状态（`HEALTHY/DEGRADED/UNHEALTHY`）
-- `Exec(ExecRequest) -> ExecResponse`：执行策略决策，返回订单操作事件
-- 并发与幂等约定：
-  - 同一账户的同一策略由系统保证串行执行
-  - 系统对同一触发事件的重复执行进行去重；`ExecRequest.exec_id` 作为执行幂等 ID
+### 生命周期方法
 
-## 触发机制
-- 触发类型（`TriggerType`）：
-  - `MARKET_DATA_TRIGGER_TYPE`：行情触发
-  - `RISK_MANAGE_TRIGGER_TYPE`：风控触发（如补充保证金、强平预警）
-  - `ORDER_STATUS_TRIGGER_TYPE`：订单状态变更触发
-- 触发详情（`TriggerDetail`）：
-  - 行情触发：`MarketDataTriggerDetail.server_ts`
-  - 风控触发：`RiskManageTriggerDetail.risk_event_type/remark`
+*   `on_init(self, context: Context)`: 策略初始化时调用。用于加载配置、初始化变量等。
+*   `on_start(self, context: Context)`: 策略启动时调用。
+*   `on_stop(self, context: Context)`: 策略停止时调用。
 
-## 请求与响应
-- `ExecRequest` 核心字段：
-  - `max_timeout`：最大超时秒数
-  - `trigger_type/trigger_detail`：触发类型与详情
-  - `market_data_context[]`：行情上下文（支持多分辨率）
-  - `account`：账户信息（含风控指标）
-  - `incomplete_orders/completed_orders`：订单集合
-  - `exchange`：交易所名称（用于佣金计算等）
-  - `exec_id`：执行幂等 ID
-  - `strategy_param`：透传策略参数
-- `ExecResponse` 执行反馈：
-  - `order_op_event[]`：订单操作事件（创建/撤单/修改）
-  - `status`：`SUCCESS/PARTIAL_SUCCESS/FAILED`
-  - `error_message`：错误信息（失败时）
-  - `warnings[]`：警告信息（非致命问题）
+### 事件处理方法
 
-## 数据模型要点
-- 订单（`Order`）：
-  - 类型：市价/限价/止损市价/止损限价
-  - 价格字段：`limit_price`、`stop_price`（不再使用语义混乱的通用 `price`）
-  - 执行信息：`avg_fill_price`、`commission`、`cancel_reason` 等
-  - 幂等：`unique_id` 为订单幂等 ID（系统维度说明见交易系统规范）
-- 账户（`Account`）：
-  - 余额与持仓：`balances`、`positions`
-  - 风控指标：`total_net_value`、`available_margin`、`margin_ratio`、`risk_level`、`leverage`
-- 行情（`MarketDataContext`）：
-  - `symbol`、`timeframe`、`bars[]`（OHLCV）
-  - `indicators[]`：技术指标（MA/EMA，或扩展结构）
+策略通过重写以下方法来处理市场事件：
 
-## 生成代码（Proto 编译）
-- 依赖：`protoc` 与对应语言的插件
-- Go（示例）：
-  - 安装：`go install google.golang.org/protobuf/cmd/protoc-gen-go@latest`
-  - 命令：`protoc --go_out=. --go_opt=paths=source_relative *.proto`
-- Python（示例）：
-  - 安装：`pip install protobuf grpcio-tools`
-  - 命令：`python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. *.proto`
+*   `on_bar(self, context: Context, bar: Bar)`: 当新的 K 线 (Bar) 数据到达时触发。
+*   `on_tick(self, context: Context, tick: Tick)`: 当新的 Tick (逐笔行情) 数据到达时触发。
+*   `on_order_status(self, context: Context, order: Order)`: 当订单状态发生变化（如成交、撤单）时触发。
+*   `on_timer(self, context: Context)`: 定时器触发（如果引擎配置了定时任务）。
 
-## Python SDK（策略侧）
-- TradingRule 与 佣金费率通过本地查询接口获取，详见 `python_sdk.md`
-  - `get_trading_rule(broker, symbol)`：本地开销，返回品种的下单与精度限制
-  - `get_commission_rates(broker, symbol)`：本地开销，返回 Maker/Taker 手续费率
+### 交易操作
 
-## 版本与兼容
-- 语义化版本管理：变更遵循 `MAJOR.MINOR.PATCH`
-- 兼容性：
-  - 添加字段：默认向后兼容（保留已有字段与语义）
-  - 删除/重命名字段：视为破坏性变更，需升级主版本并提供迁移建议
+策略类提供了简化的交易接口：
 
-## 贡献与反馈
-- 欢迎通过 Issue/PR 提交改进建议或扩展（指标、订单字段、错误模型等）
-- 请遵循现有风格与注释规范：所有标识符与字段保留中文注释（`INVALID_XXX` 占位除外）
+*   `buy(context, symbol, price, volume, order_type)`: 买入开仓。
+*   `sell(context, symbol, price, volume, order_type)`: 卖出开仓。
+*   `self.sdk`: 访问数据 SDK 的代理对象 (自动注入 Context)。
 
+## 2. 核心对象 (Objects)
+
+定义在 `strategy_spec.objects` 中。
+
+### Context (上下文)
+
+`Context` 对象贯穿整个策略生命周期，用于存储状态和传递信息。
+
+*   `portfolio`: 投资组合信息（资金、持仓）。
+*   `current_dt`: 当前回测/实盘时间。
+*   `run_params`: 运行参数。
+
+### 市场数据
+
+*   **Bar**: K线数据 (symbol, timestamp, open, high, low, close, volume, etc.)
+*   **Tick**: 快照数据 (symbol, timestamp, price, volume, bid/ask quotes)
+
+### 交易数据
+
+*   **Order**: 订单详情。
+    *   `symbol`: 标的代码。
+    *   `direction_type`: 买卖方向 (`BUY`, `SELL`)。
+    *   `order_type`: 订单类型 (`MARKET`, `LIMIT`, `STOP_MARKET`, `STOP_LIMIT`)。
+    *   `status`: 订单状态 (`OPEN`, `FILLED`, `CANCELED`, etc.)。
+
+## 3. 编写策略示例
+
+```python
+from strategy_spec.strategy import Strategy
+from strategy_spec.objects import Context, Bar, OrderType
+
+class MyStrategy(Strategy):
+    def on_init(self, context: Context):
+        # 初始化配置
+        print("策略初始化")
+
+    def on_start(self, context: Context):
+        # 策略启动
+        pass
+
+    def on_timer(self, context: Context):
+        # 定时逻辑
+        # 使用 self.sdk 调用数据接口
+        # 注意: self.sdk 会自动注入 context
+        try:
+            df = self.sdk.get_history_kline("BTC/USDT")
+        except Exception as e:
+            pass
+        
+        # 下单
+        self.buy(context, "BTC/USDT", 50000, 0.1)
+```
+
+## 4. 策略配置规范 (Strategy Config)
+
+策略通常需要一个 YAML 配置文件来定义运行时参数（如触发方式、时间间隔等）。
+
+### 配置文件结构示例
+
+```yaml
+# 策略类名 (必须)
+strategy_class: "MyStrategy"
+
+# SDK 后端 (可选, 默认为 engine_mode 决定)
+sdk_backend: "mock" # or "real", "backtrader"
+
+# 触发器配置 (Trigger Config)
+trigger:
+  type: "timer" # 触发类型: timer (定时), event (事件)
+  timer_cfg:
+    interval: "2s" # 时间间隔: s=秒, m=分, h=时
+
+# 自定义策略参数 (会注入到 context.strategy_params)
+params:
+  symbol: "BTC/USDT"
+  ma_window: 10
+```
+
+### 注意事项
+
+*   **回测模式下的 Timer 触发**:
+    在回测模式 (Backtest Mode) 下，虽然配置了 `interval: 2s`，但策略的触发频率受限于回测数据的最小分辨率 (Bar Resolution)。
+    *   如果数据是 1分钟 Bar，那么 `on_timer` 依然是 2s 触发一次时，bar 的 OHCLV **并没有任何变化**。
+    *   请在编写回测策略时务必注意这一点。

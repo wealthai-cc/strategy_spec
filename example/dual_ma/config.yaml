@@ -1,0 +1,15 @@
+# 策略类名
+strategy_class: "DualMAStrategy"
+
+# 触发器配置
+trigger:
+  type: "timer"
+  timer_cfg:
+    interval: "5s"  # 5s 触发一次
+
+# 自定义参数 (可选，从context.strategy_params读取)
+params:
+  symbol: "BTC/USDT"
+  quantity: 0.01
+  short_window: 5
+  long_window: 10
