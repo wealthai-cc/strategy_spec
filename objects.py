@@ -16,6 +16,7 @@ class OrderType(Enum):
     LIMIT_ORDER_TYPE = 2           # 限价单
     STOP_MARKET_ORDER_TYPE = 3     # 止损市价单
     STOP_LIMIT_ORDER_TYPE = 4      # 止损限价单
+    PSEUDO_FINAL_CLOSE_ORDER_TYPE = 100  # 伪最后平仓订单
 
 class TimeInForceType(Enum):
     INVALID_TIF_TYPE = 0
