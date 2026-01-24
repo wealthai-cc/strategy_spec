@@ -16,6 +16,7 @@ class OrderType(Enum):
     LIMIT_ORDER_TYPE = 2           # 限价单
     STOP_MARKET_ORDER_TYPE = 3     # 止损市价单
     STOP_LIMIT_ORDER_TYPE = 4      # 止损限价单
+    PSEUDO_FINAL_CLOSE_ORDER_TYPE = 100
 
 class TimeInForceType(Enum):
     INVALID_TIF_TYPE = 0
@@ -166,6 +167,7 @@ class Context(object):
         self.available_cash: float = 0.0  # 可下单现金（通常等价于 portfolio.available_cash；策略风控应优先使用）
         self.universe: List[str] = []  # 策略关注的标的列表（订阅/回测加载的 symbols）
         self.strategy_params: Dict = {}  # 策略参数（来自配置或上层 ExecRequest.strategy_param）
+        self.engine_instance_id: str = ""
         self._order_ops: List[OrderOp] = []  # 订单操作历史（归档用途；不要当作执行队列）
 
     def add_order_op(self, op: OrderOp):
