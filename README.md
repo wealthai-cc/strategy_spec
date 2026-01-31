@@ -29,6 +29,81 @@
 *   `sell(context, symbol, price, volume, order_type)`: 卖出开仓。
 *   `self.sdk`: 访问数据 SDK 的代理对象 (自动注入 Context)。
 
+### SDK 方法
+
+通过 `self.sdk` 可以调用以下方法：
+
+*   `get_history_kline(symbol, max_count, ktype)`: 获取历史K线数据。
+*   `call_llm(context, template_id, params, timeout)`: 调用LLM服务。
+
+#### call_llm 方法
+
+`call_llm` 方法用于调用LLM服务进行市场分析、决策生成等AI辅助功能。
+
+**方法签名**：
+```python
+result = self.sdk.call_llm(
+    context: Context,
+    template_id: str,
+    params: Dict[str, Any],
+    timeout: int = 60
+) -> Dict[str, Any]
+```
+
+**参数说明**：
+*   `context`: 上下文对象，包含执行环境信息（通常传入策略的 `context` 参数）。
+*   `template_id`: 模板ID，指定要使用的LLM模板（见下方可用模板列表）。
+*   `params`: 模板参数字典，传递给LLM模板的变量，格式需符合对应模板的要求。
+*   `timeout`: 超时时间（秒），默认60秒。
+
+**返回值**：
+返回字典，包含以下字段：
+*   `code_blocks`: 代码块列表，每个元素包含 `type` 和 `content` 字段。
+
+**可用模板列表**：
+
+| 模板ID | 名称 | 类别 | 说明 |
+|--------|------|------|------|
+| `ai_trader_whole_market` | Crypto 交易员 | 交易决策 | 基于实时市场数据生成交易决策 |
+| `crypto_market_analysis` | 加密货币整体市场分析 | 市场分析 | 涵盖趋势、情绪、流动性、波动性等 |
+| `crypto_sector_rotation` | 加密货币板块轮动分析 | 板块分析 | 关注资金流向和相对强弱 |
+| `crypto_hotspot_tracking` | 加密货币热点追踪 | 热点追踪 | 追踪热门代币、概念板块、新项目 |
+| `crypto_technical_analysis` | 加密货币技术指标分析 | 技术分析 | 多指标判断、背离、超买超卖 |
+| `crypto_pattern_recognition` | 加密货币图表形态识别 | 形态识别 | K线形态、趋势线、突破形态 |
+| `crypto_multi_timeframe` | 加密货币多时间框架分析 | 多周期分析 | 多周期共振、一致性、最佳入场 |
+| `crypto_volume_price_analysis` | 加密货币量价关系分析 | 量价分析 | 量价配合、放量突破、订单簿深度 |
+| `crypto_onchain_flow` | 加密货币链上资金流分析 | 链上分析 | 交易所净流入流出、巨鲸资金变化、矿工持仓 |
+| `crypto_onchain_metrics` | 加密货币链上指标分析 | 链上指标 | MVRV比率、NVT比率、活跃地址、网络算力 |
+| `crypto_whale_monitoring` | 加密货币巨鲸监控 | 巨鲸监控 | 巨鲸地址持仓变化、转账行为、持仓集中度 |
+
+**使用示例**：
+```python
+def on_bar(self, context: Context, bar: Bar) -> List[OrderOp]:
+    # 准备LLM调用参数
+    params = {
+        "symbol": "BTC/USDT",
+        "current_price": float(bar.close),
+        "volume": float(bar.volume),
+        "timestamp": bar.timestamp.isoformat()
+    }
+    
+    # 调用LLM进行市场分析
+    result = self.sdk.call_llm(
+        context=context,
+        template_id="crypto_market_analysis",
+        params=params,
+        timeout=30
+    )
+    
+    # 处理LLM返回结果
+    code_blocks = result.get('code_blocks', [])
+    for block in code_blocks:
+        # 根据LLM分析结果生成交易信号
+        pass
+    
+    return []
+```
+
 ## 2. 核心对象 (Objects)
 
 定义在 `strategy_spec.objects` 中。
