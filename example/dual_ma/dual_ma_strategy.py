@@ -61,7 +61,7 @@ class DualMAStrategy(Strategy):
         """
         当新的 Bar (K线) 到达时调用。
         """
-        self.logger.debug(f"current bar: {bar}")
+        # self.logger.debug(f"current bar: {bar}")
         ops = []
         try:
             # Use TimeFrame.to_ktype() directly
@@ -105,28 +105,26 @@ class DualMAStrategy(Strategy):
             # 这里简单演示: 金叉买入, 死叉卖出
             # 实际策略中可能需要检查当前持仓 (self.current_pos) 避免重复开仓
             
-            pos = self.context.portfolio.positions.get(self.symbol, None)
+            pos = context.portfolio.positions.get(self.symbol, None)
             if pos:
-                self.current_pos = pos.position_size
+                self.current_pos = pos.available_volume
             else:
                 self.logger.error(f"Failed to get position for {self.symbol}")
                 return []
             
             if golden_cross:
                 self.logger.info(f"Signal: Golden Cross detected at {curr['close']}")
-                # 如果当前没有持仓，则买入
-                if self.current_pos <= 0:
-                    self.logger.info(f"Action: Buying {self.quantity} {self.symbol}")
-                    op = self.buy(context, self.symbol, float(curr['close']), self.quantity, OrderType.MARKET_ORDER_TYPE)
-                    ops.append(op)
+                # 买入
+                self.logger.info(f"Action: Buying {self.quantity} {self.symbol}")
+                op = self.buy(context, self.symbol, float(curr['close']), self.quantity, OrderType.MARKET_ORDER_TYPE)
+                ops.append(op)
             
             elif death_cross:
                 self.logger.info(f"Signal: Death Cross detected at {curr['close']}")
-                # 如果当前持有仓位，则卖出
-                if self.current_pos >= 0:
-                    self.logger.info(f"Action: Selling {self.quantity} {self.symbol}")
-                    op = self.sell(context, self.symbol, float(curr['close']), self.quantity, OrderType.MARKET_ORDER_TYPE)
-                    ops.append(op)
+                # 卖出
+                self.logger.info(f"Action: Selling {self.quantity} {self.symbol}")
+                op = self.sell(context, self.symbol, float(curr['close']), self.quantity, OrderType.MARKET_ORDER_TYPE)
+                ops.append(op)
             
             return ops
 
