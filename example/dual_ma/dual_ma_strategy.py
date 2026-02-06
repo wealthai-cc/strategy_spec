@@ -2,7 +2,7 @@ from typing import List, Optional
 import logging
 import pandas as pd
 from strategy_spec.strategy import Strategy
-from strategy_spec.objects import Context, Order, OrderStatusType, OrderType, Bar, Tick, OrderOp
+from strategy_spec.objects import Context, Order, OrderType, Bar, Tick, OrderOp, DirectionType
 
 class DualMAStrategy(Strategy):
     """
@@ -62,8 +62,11 @@ class DualMAStrategy(Strategy):
         当新的 Bar (K线) 到达时调用。
         """
         # self.logger.debug(f"current bar: {bar}")
-        ops = []
         try:
+            if not self.sdk:
+                self.logger.error("SDK not initialized")
+                return []
+
             # Use TimeFrame.to_ktype() directly
             ktype = bar.interval.to_ktype()
 
@@ -114,19 +117,31 @@ class DualMAStrategy(Strategy):
             
             if golden_cross:
                 self.logger.info(f"Signal: Golden Cross detected at {curr['close']}")
-                # 买入
                 self.logger.info(f"Action: Buying {self.quantity} {self.symbol}")
-                op = self.buy(context, self.symbol, float(curr['close']), self.quantity, OrderType.MARKET_ORDER_TYPE)
-                ops.append(op)
+                order = Order(
+                    symbol=self.symbol,
+                    direction_type=DirectionType.BUY_DIRECTION_TYPE,
+                    order_type=OrderType.MARKET_ORDER_TYPE,
+                    size=str(self.quantity),
+                    price=str(curr["close"]),
+                )
+                order_id = self.sdk.place_order(order)
+                self.logger.info(f"Order placed: {order_id}")
             
             elif death_cross:
                 self.logger.info(f"Signal: Death Cross detected at {curr['close']}")
-                # 卖出
                 self.logger.info(f"Action: Selling {self.quantity} {self.symbol}")
-                op = self.sell(context, self.symbol, float(curr['close']), self.quantity, OrderType.MARKET_ORDER_TYPE)
-                ops.append(op)
+                order = Order(
+                    symbol=self.symbol,
+                    direction_type=DirectionType.SELL_DIRECTION_TYPE,
+                    order_type=OrderType.MARKET_ORDER_TYPE,
+                    size=str(self.quantity),
+                    price=str(curr["close"]),
+                )
+                order_id = self.sdk.place_order(order)
+                self.logger.info(f"Order placed: {order_id}")
             
-            return ops
+            return []
 
         except Exception as e:
             self.logger.error(f"Error in on_bar: {e}", exc_info=True)
