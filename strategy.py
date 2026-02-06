@@ -1,15 +1,12 @@
 import logging
 from abc import ABC, abstractmethod
 from typing import List, Optional, TYPE_CHECKING
-import datetime
-import uuid
 
 if TYPE_CHECKING:
-    from strategy_sdk.sdk_frontend_base import DataSDKBase
+    from strategy_sdk.sdk_frontend_base import StrategySDKBase
 
 from strategy_spec.objects import (
-    Context, Bar, Tick, Order, OrderOp, OrderOpType, 
-    DirectionType, OrderType, OrderStatusType, TimeInForceType
+    Context, Bar, Tick, Order, OrderOp
 )
 
 class Strategy(ABC):
@@ -23,8 +20,8 @@ class Strategy(ABC):
 
     def __init__(self):
         # SDK 实例，由 Engine 注入
-        # 类型为 DataSDKBase (实际上是 SDKProxy)
-        self.sdk: Optional['DataSDKBase'] = None
+        # 类型为 StrategySDKBase (实际上是 SDKProxy)
+        self.sdk: Optional['StrategySDKBase'] = None
         
         # 初始化日志
         self.log_level = "INFO"
@@ -91,33 +88,3 @@ class Strategy(ABC):
         如果启用了定时器，则周期性调用。
         """
         pass
-
-    # --- 辅助方法 ---
-    # 这些辅助方法生成 OrderOps 并返回。
-
-    def buy(self, context: Context, symbol: str, price: float, volume: float, order_type: OrderType = OrderType.LIMIT_ORDER_TYPE) -> OrderOp:
-        """
-        买入开仓
-        """
-        return self._create_order(context, symbol, DirectionType.BUY_DIRECTION_TYPE, price, volume, order_type)
-
-    def sell(self, context: Context, symbol: str, price: float, volume: float, order_type: OrderType = OrderType.LIMIT_ORDER_TYPE) -> OrderOp:
-        """
-        卖出开仓
-        """
-        return self._create_order(context, symbol, DirectionType.SELL_DIRECTION_TYPE, price, volume, order_type)
-
-    def _create_order(self, context: Context, symbol: str, direction: DirectionType, price: float, volume: float, order_type: OrderType) -> OrderOp:
-        order = Order(
-            order_id="", # 系统分配
-            unique_id=str(uuid.uuid4()), # 客户端生成的唯一ID
-            symbol=symbol,
-            direction_type=direction,
-            order_type=order_type,
-            price=str(price),
-            size=str(volume),
-            status=OrderStatusType.OPEN_ORDER_STATUS_TYPE,
-            time_in_force=TimeInForceType.GTC_TIF_TYPE # 默认 GTC
-        )
-        op = OrderOp(op_type=OrderOpType.CREATE, order=order)
-        return op

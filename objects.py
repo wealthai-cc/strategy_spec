@@ -34,7 +34,12 @@ class OrderStatusType(Enum):
     REJECTED_ORDER_STATUS_TYPE = 6
     EXPIRED_ORDER_STATUS_TYPE = 7
 
-
+class AssetType(Enum):
+    INVALID_ASSET_TYPE = 0
+    SPOT_ASSET_TYPE = 1
+    PERP_ASSET_TYPE = 2
+    FUTURES_ASSET_TYPE = 3
+    EQUITY_ASSET_TYPE = 4
 
 class TimeUnit(Enum):
     MINUTE = 'm'
@@ -111,11 +116,12 @@ class Order:
     direction_type: DirectionType
     order_type: OrderType
     size: str # String to avoid float precision issues
+    asset_type: AssetType = AssetType.SPOT_ASSET_TYPE
     
     # Optional / Conditional fields
-    price: str = "0"          # Limit Price
-    stop_price: str = "0"     # Stop Price
-    quote_order_qty: str = "0" # Quote Order Qty (Market Buy by Value)
+    price: str = ""          # Limit Price
+    stop_price: str = ""     # Stop Price
+    quote_order_qty: str = "" # Quote Order Qty (Market Buy by Value)
     time_in_force: TimeInForceType = TimeInForceType.GTC_TIF_TYPE
     
     # System fields (assigned by engine/server)
@@ -123,8 +129,8 @@ class Order:
     unique_id: str = "" # Client ID
     create_ts: int = 0
     status: OrderStatusType = OrderStatusType.INVALID_ORDER_STATUS_TYPE
-    executed_size: str = "0"
-    cummulative_quote_qty: str = "0"
+    executed_size: str = ""
+    cummulative_quote_qty: str = ""
     update_ts: int = 0
     
 class OrderOpType(Enum):
@@ -169,6 +175,7 @@ class Context(object):
         self.strategy_params: Dict = {}  # 策略参数（来自配置或上层 ExecRequest.strategy_param）
         self.engine_instance_id: str = ""
         self._order_ops: List[OrderOp] = []  # 订单操作历史（归档用途；不要当作执行队列）
+        self.auth_headers: Dict[str, str] = {} # 交易鉴权头
 
     def add_order_op(self, op: OrderOp):
         """
