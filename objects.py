@@ -176,6 +176,7 @@ class Context(object):
         self.engine_instance_id: str = ""
         self._order_ops: List[OrderOp] = []  # 订单操作历史（归档用途；不要当作执行队列）
         self.auth_headers: Dict[str, str] = {} # 交易鉴权头
+        self.trace_id: str = "" # W3C traceparent
 
     def add_order_op(self, op: OrderOp):
         """
